@@ -5,11 +5,13 @@ import './pages.css';
 import './tables.css';
 import './animations.css';
 import './chatbot.css';
+import './dashboard.css';
 import { mockCalls, mockTranscript, mockWorkflowLogs, n8nWorkflowJSON } from './data.js';
 import VoiceOpsAssistant from './chatbot.js';
+import { renderDashboard } from './dashboard.js';
 
 // State
-let currentPage = 'home';
+let currentPage = 'dashboard';
 let selectedCallId = null;
 let showJsonView = false;
 let processingState = null; // null | { step: 0-4, fileName: string }
@@ -27,7 +29,9 @@ window.mockWorkflowLogs = mockWorkflowLogs;
 
 // Navigation items
 const navItems = [
-  { id: 'home', label: 'Active Risk Cases', icon: '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>' },
+  { id: 'dashboard', label: 'Dashboard', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>' },
+
+  { id: 'cases', label: 'Active Cases', icon: '<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>' },
 
   { id: 'risk-queue', label: 'Risk Queue', icon: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' },
   { id: 'workflow-logs', label: 'Workflow Logs', icon: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
@@ -40,7 +44,7 @@ document.addEventListener('DOMContentLoaded', init);
 function init() {
   renderSidebar();
   renderHeader();
-  renderPage();
+  renderPage(); // async — renders skeleton then real content
   setupEventListeners();
   renderModalContent();
   
@@ -143,6 +147,8 @@ function setupEventListeners() {
 
 // Global navigation
 window.navigateTo = function (page) {
+  // backward compat: 'home' -> 'cases'
+  if (page === 'home') page = 'cases';
   currentPage = page;
   selectedCallId = null;
   renderSidebar();
@@ -243,10 +249,14 @@ function setupUploadHandlers() {
 }
 
 // Page rendering
-function renderPage() {
+async function renderPage() {
   const content = document.getElementById('content');
   switch (currentPage) {
-    case 'home':
+    case 'dashboard':
+      content.innerHTML = '<div class="dashboard-page"><div class="dash-stats-row">' + Array(4).fill('<div class="dash-stat-card skeleton"><div class="skeleton-shine"></div></div>').join('') + '</div></div>';
+      content.innerHTML = await renderDashboard();
+      break;
+    case 'cases':
       content.innerHTML = renderHomePage();
       setupUploadHandlers();
       break;
@@ -263,7 +273,8 @@ function renderPage() {
       content.innerHTML = renderInvestigationPage();
       break;
     default:
-      content.innerHTML = renderHomePage();
+      content.innerHTML = '<div class="dashboard-page"><div class="dash-stats-row">' + Array(4).fill('<div class="dash-stat-card skeleton"><div class="skeleton-shine"></div></div>').join('') + '</div></div>';
+      content.innerHTML = await renderDashboard();
       setupUploadHandlers();
   }
 }
@@ -490,7 +501,7 @@ function renderInvestigationPage() {
     <div class="workspace-container">
         <!-- 1. Breadcrumb Nav -->
         <div class="breadcrumb-nav">
-          <a href="#" onclick="navigateTo('home'); return false;" class="breadcrumb-item">Risk Queue</a>
+          <a href="#" onclick="navigateTo('cases'); return false;" class="breadcrumb-item">Active Cases</a>
           <span class="breadcrumb-separator">/</span>
           <span class="breadcrumb-active">Case #${call.call_id}</span>
         </div>
@@ -617,7 +628,7 @@ function escalateCase(callId) {
 
     // Show toast (simulated by alert for now or simple overlay)
     alert('Case Escalated. Ticket #Comp-992 created.');
-    navigateTo('home');
+    navigateTo('cases');
   }
 }
 

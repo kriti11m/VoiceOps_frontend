@@ -24,7 +24,7 @@ export class VoiceOpsAssistant {
     // Update conversation based on context
     if (context.page === 'investigation' && context.callId) {
       this.setInvestigationContext(context.callId);
-    } else if (context.page === 'home') {
+    } else if (context.page === 'dashboard' || context.page === 'cases' || context.page === 'home') {
       this.setDashboardContext();
     } else if (context.page === 'risk-queue') {
       this.setQueueContext();
