@@ -4,13 +4,26 @@ import './components.css';
 import './pages.css';
 import './tables.css';
 import './animations.css';
+import './chatbot.css';
 import { mockCalls, mockTranscript, mockWorkflowLogs, n8nWorkflowJSON } from './data.js';
+import VoiceOpsAssistant from './chatbot.js';
 
 // State
 let currentPage = 'home';
 let selectedCallId = null;
 let showJsonView = false;
 let processingState = null; // null | { step: 0-4, fileName: string }
+
+// Initialize AI Assistant
+const assistant = new VoiceOpsAssistant();
+
+// Make assistant globally available for easier debugging/integration
+window.voiceOpsAssistant = assistant;
+
+// Make mock data globally available for assistant
+window.mockCalls = mockCalls;
+window.mockTranscript = mockTranscript;
+window.mockWorkflowLogs = mockWorkflowLogs;
 
 // Navigation items
 const navItems = [
@@ -30,6 +43,10 @@ function init() {
   renderPage();
   setupEventListeners();
   renderModalContent();
+  
+  // Initialize AI Assistant
+  assistant.init();
+  updateAssistantContext();
 }
 
 // Sidebar
@@ -130,6 +147,7 @@ window.navigateTo = function (page) {
   selectedCallId = null;
   renderSidebar();
   renderPage();
+  updateAssistantContext();
 };
 
 window.toggleExplanation = function (callId) {
@@ -142,6 +160,7 @@ window.openCallInvestigation = function (callId) {
   currentPage = 'investigation';
   renderSidebar();
   renderPage();
+  updateAssistantContext();
 };
 
 window.simulateCall = function () {
@@ -629,6 +648,16 @@ function renderModalContent() {
   if (showJsonView) {
     modalBody.innerHTML = `<div class="json-preview"><pre><code>${JSON.stringify(n8nWorkflowJSON, null, 2)}</code></pre></div>`;
   } else {
-    modalBody.innerHTML = `<div class="workflow-diagram"><div class="workflow-step"><div class="step-icon call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2"/></svg></div><span>Call Received</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon voiceops">VO</div><span>VoiceOps Analysis</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon decision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/></svg></div><span>Risk Decision</span></div><div class="workflow-connector"></div><div class="workflow-outputs"><div class="workflow-step small"><div class="step-icon slack">${getAutomationIcon('slack')}</div><span>Slack</span></div><div class="workflow-step small"><div class="step-icon crm">${getAutomationIcon('crm')}</div><span>CRM</span></div><div class="workflow-step small"><div class="step-icon callback">${getAutomationIcon('callback')}</div><span>Callback</span></div></div></div><div class="modal-description"><h3>Plug-and-Play Workflow Automation</h3><p>VoiceOps integrates seamlessly with n8n to automate your operational workflows.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✓</span><span>Real-time Slack notifications for high-risk calls</span></div><div class="feature"><span class="feature-icon">✓</span><span>Automatic CRM record updates with risk tags</span></div><div class="feature"><span class="feature-icon">✓</span><span>Smart callback scheduling based on behavior</span></div><div class="feature"><span class="feature-icon">✓</span><span>Customizable escalation paths for compliance</span></div></div></div>`;
+    modalBody.innerHTML = `<div class="workflow-diagram"><div class="workflow-step"><div class="step-icon call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2"/></svg></div><span>Call Received</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon voiceops">VO</div><span>VoiceOps Analysis</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon decision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 515.83 1c0 2-3 3-3 3"/></svg></div><span>Risk Decision</span></div><div class="workflow-connector"></div><div class="workflow-outputs"><div class="workflow-step small"><div class="step-icon slack">${getAutomationIcon('slack')}</div><span>Slack</span></div><div class="workflow-step small"><div class="step-icon crm">${getAutomationIcon('crm')}</div><span>CRM</span></div><div class="workflow-step small"><div class="step-icon callback">${getAutomationIcon('callback')}</div><span>Callback</span></div></div></div><div class="modal-description"><h3>Plug-and-Play Workflow Automation</h3><p>VoiceOps integrates seamlessly with n8n to automate your operational workflows.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✓</span><span>Real-time Slack notifications for high-risk calls</span></div><div class="feature"><span class="feature-icon">✓</span><span>Automatic CRM record updates with risk tags</span></div><div class="feature"><span class="feature-icon">✓</span><span>Smart callback scheduling based on behavior</span></div><div class="feature"><span class="feature-icon">✓</span><span>Customizable escalation paths for compliance</span></div></div></div>`;
   }
+}
+
+// Update assistant context based on current page and selection
+function updateAssistantContext() {
+  const context = {
+    page: currentPage,
+    callId: selectedCallId
+  };
+  
+  assistant.setContext(context);
 }

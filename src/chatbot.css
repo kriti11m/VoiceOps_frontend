@@ -1,0 +1,122 @@
+/* Additional Chatbot Enhancements */
+
+/* Hide assistant panel by default on smaller screens */
+@media (max-width: 768px) {
+    .assistant-panel.collapsed {
+        height: 60px;
+        overflow: hidden;
+    }
+    
+    .assistant-panel.collapsed .chat-area,
+    .assistant-panel.collapsed .input-area {
+        display: none;
+    }
+    
+    .assistant-toggle {
+        display: block;
+        width: 100%;
+        background: var(--bg-elevated);
+        border: none;
+        padding: 15px;
+        color: var(--text-primary);
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .assistant-toggle:hover {
+        background: var(--bg-card);
+    }
+}
+
+@media (min-width: 769px) {
+    .assistant-toggle {
+        display: none;
+    }
+}
+
+/* Enhanced message styling */
+.chat-message.ai p {
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+
+.chat-message.ai p:last-child {
+    margin-bottom: 0;
+}
+
+/* Quick action buttons in AI responses */
+.ai-action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.ai-action-btn {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-action-btn:hover {
+    background: var(--accent-blue-hover);
+    transform: translateY(-1px);
+}
+
+.ai-action-btn.secondary {
+    background: transparent;
+    color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+}
+
+.ai-action-btn.secondary:hover {
+    background: var(--accent-blue);
+    color: white;
+}
+
+/* Contextual indicators */
+.context-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    padding: 4px 8px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.context-indicator .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+}
+
+/* Smart scroll behavior */
+.chat-area {
+    scroll-behavior: smooth;
+}
+
+.chat-area::-webkit-scrollbar {
+    width: 4px;
+}
+
+.chat-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-area::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+.chat-area::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
