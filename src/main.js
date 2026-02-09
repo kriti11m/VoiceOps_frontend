@@ -342,47 +342,36 @@ function renderCallCard(call, index = 0) {
   const rag = call.rag_output;
   const riskLevel = rag.grounded_assessment === 'high_risk' ? 'high' : (rag.grounded_assessment === 'medium_risk' ? 'medium' : 'low');
 
-  // Mini pipeline steps
-  const steps = [
-    { label: 'Transcribed', status: 'complete' },
-    { label: 'Signals', status: 'complete' },
-    { label: 'RAG Grounding', status: 'complete' },
-    { label: 'Action', status: call.automations.length > 0 ? 'complete' : 'pending' }
-  ];
-
   return `<div class="call-card" data-call-id="${call.call_id}" style="animation-delay: ${index * 0.1}s">
     <div class="call-card-content">
-      <!-- Left: Risk Badge -->
-      <div class="risk-badge-large ${riskLevel}" title="Model Score: ${risk.risk_score} • Fraud Likelihood: ${risk.fraud_likelihood} • Confidence: ${Math.round(risk.confidence * 100)}%">
+      <!-- Left: Verdict -->
+      <div class="risk-badge-large ${riskLevel}" style="min-width:90px;text-align:center">
         <span class="score">${risk.risk_score}</span>
-        <span class="label">${risk.fraud_likelihood.toUpperCase()}</span>
+        <span class="label" style="font-size:10px">${riskLevel.toUpperCase()}</span>
       </div>
       
-      <!-- Center: Case Info & Pipeline -->
-      <div class="case-info">
-        <div class="case-header">
-          <h3>${call.phone_masked}</h3>
-          <span class="case-id">${call.call_id}</span>
+      <!-- Center: Pattern & Rationale -->
+      <div class="case-info" style="flex:1;padding-left:16px">
+        <div class="case-header" style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+           <strong style="color:var(--text-primary);font-size:16px">${rag.matched_patterns[0] || 'Pattern Detected'}</strong>
+           <span class="case-id-badge" style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);background:var(--bg-elevated);padding:2px 6px;border-radius:4px;border:1px solid var(--border-color)">${call.call_id}</span>
         </div>
-        <div class="case-meta">
-          <span>${call.duration}</span> • <span>${timeAgo(new Date(call.call_timestamp))}</span>
-        </div>
-        <div class="mini-pipeline">
-           ${steps.map(s => `<div class="mini-step ${s.status}" title="${s.label}"></div>`).join('')}
+        <p style="margin:0;font-size:13px;color:var(--text-secondary);line-height:1.4;max-width:90%">
+          ${rag.explanation.substring(0, 110)}...
+        </p>
+        <div class="case-meta" style="margin-top:10px;font-size:12px;color:var(--text-secondary);display:flex;gap:16px;align-items:center">
+          <span>${timeAgo(new Date(call.call_timestamp))}</span>
+          <span style="opacity:0.3">|</span>
+          <span>Confidence: ${Math.round(rag.confidence * 100)}%</span>
+          <span style="opacity:0.3">|</span>
+          <span>${call.customer_name || 'Unknown Customer'}</span>
         </div>
       </div>
       
-      <!-- Right: RAG Headline -->
-      <div class="rag-summary">
-        <div class="rag-headline">
-          <span class="rag-flag">${rag.matched_patterns[0] || 'Pattern Detected'}</span>
-          <span class="rag-confidence">RAG Confidence: ${Math.round(rag.confidence * 100)}%</span>
-        </div>
-        <div class="rag-recommendation">
-           Recommended: <strong>${rag.recommended_action.replace(/_/g, ' ').toUpperCase()}</strong>
-        </div>
+      <!-- Right: Action -->
+      <div class="rag-summary" style="align-items:flex-end;min-width:auto;padding-left:24px;border-left:1px solid var(--border-color)">
         <button class="btn-review" onclick="openCallInvestigation('${call.call_id}')">
-          Review Case <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          Open Case <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
     </div>
@@ -453,113 +442,118 @@ function renderSettingsPage() {
 }
 
 // Investigation Page (Split View)
+// Investigation Page (Phase 4: Compliance Workspace)
 function renderInvestigationPage() {
   const call = mockCalls.find(c => c.call_id === selectedCallId);
   if (!call) return renderHomePage();
 
   const risk = call.input_risk_assessment;
   const rag = call.rag_output;
+  const riskClass = rag.grounded_assessment;
 
-  return `<div class="investigation-page">
-    <div class="investigation-header">
-      <button class="btn-back" onclick="navigateTo('home')">← Back to Cases</button>
-      <div class="case-title">
-        <h1>Investigation: ${call.call_id}</h1>
-        <span class="case-time">${timeAgo(new Date(call.call_timestamp))}</span>
+  // Reset to full width for workspace mode
+  // Note: ideally this would be handled by a class on body or #content, but for now we inject styles
+
+  return `<div class="workspace-mode">
+    <div class="workspace-container">
+        <!-- 1. Breadcrumb Nav -->
+        <div class="breadcrumb-nav">
+          <a href="#" onclick="navigateTo('home'); return false;" class="breadcrumb-item">Risk Queue</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="breadcrumb-active">Case #${call.call_id}</span>
+        </div>
+    </div>
+
+    <!-- 2. Identity Bar (Sticky) -->
+    <div class="identity-bar">
+      <div class="identity-main">
+        <span class="identity-name">${call.customer_name || 'Unknown Customer'}</span>
+        <span class="identity-phone">${call.phone_masked}</span>
       </div>
-      <div class="header-actions">
-        <button class="btn-secondary" onclick="openJSONModal()">View JSON</button>
-        <button class="btn-secondary" onclick="openSourcesModal()">View Sources</button>
+      <div class="identity-meta">
+        <div class="meta-item" title="Loan ID">
+          <span class="meta-icon">📄</span> ${call.loan_id || 'N/A'}
+        </div>
+        <div class="meta-item" title="Interaction History">
+          <span class="meta-icon">clock</span> ${call.previous_calls_count || 0} Previous Calls
+        </div>
+        <div class="meta-item" title="Voice Biometrics">
+           <span class="meta-icon">🎙️</span> Voice Match ${Math.round((call.voice_match_confidence || 0) * 100)}%
+        </div>
       </div>
     </div>
 
-    <div class="investigation-split-view">
-      <!-- Left Column: Signals & Evidence -->
-      <div class="col-signals">
-        <div class="panel-card">
-          <h3>Signals & Evidence</h3>
-          <div class="risk-score-display ${rag.grounded_assessment}">
-            <div class="score-circle">
-              <span class="score-value">${risk.risk_score}</span>
-              <span class="score-label">RISK</span>
-            </div>
-            <div class="risk-metrics">
-              <div class="metric">
-                <label>Fraud Likelihood</label>
-                <div class="progress-bar"><div class="fill ${risk.fraud_likelihood}" style="width: ${risk.score}%"></div></div>
-                <span>${risk.fraud_likelihood.toUpperCase()}</span>
-              </div>
-              <div class="metric">
-                <label>Model Confidence</label>
-                <span>${Math.round(risk.confidence * 100)}%</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="signals-list-section">
-            <h4>Extracted Signals</h4>
-            <ul class="signals-list">
-              <!-- Using matched patterns as proxy for signals if actual snippet signals aren't in mock -->
-              ${rag.matched_patterns.map(p => `<li>
-                <span class="signal-icon">⚠️</span>
-                <span class="signal-text">${p}</span>
-                <button class="btn-link" onclick="jumpToTranscript()">View Transcript</button>
-              </li>`).join('')}
-            </ul>
-          </div>
-
-          <div class="transcript-mini-view">
-             <!-- Placeholder for transcript -->
-             <h4>Transcript Snippet</h4>
-             <div class="transcript-snippet">
-               ${mockTranscript.slice(3, 6).map(t => `<p><strong>${t.speaker}:</strong> ${t.text}</p>`).join('')}
-             </div>
-          </div>
+    <!-- 3. Risk System Header -->
+    <div class="risk-system-header">
+      <div class="risk-decision-block ${riskClass}">
+        <h2>${rag.grounded_assessment === 'high_risk' ? 'HIGH RISK — ESCALATE TO COMPLIANCE' : rag.grounded_assessment.replace('_', ' ').toUpperCase()}</h2>
+        <div class="risk-scores-inline">
+          <span>Risk Score: ${risk.risk_score}</span>
+          <span>•</span>
+          <span>Confidence: ${Math.round(rag.confidence * 100)}%</span>
         </div>
       </div>
+      
+      <div class="action-bar">
+         ${renderActionButtons(rag.recommended_action, call.call_id)}
+      </div>
+    </div>
 
-      <!-- Right Column: RAG Grounding & Action (PRIORITY) -->
-      <div class="col-rag">
-        <div class="panel-card rag-panel">
-          <div class="rag-header">
-            <h3>RAG Knowledge Grounding</h3>
-            <span class="rag-badge">Confidence: ${Math.round(rag.confidence * 100)}%</span>
-          </div>
-          
-          <div class="grounded-assessment-box ${rag.grounded_assessment}">
-             <h4>${rag.grounded_assessment.replace('_', ' ').toUpperCase()}</h4>
-             <p>${rag.explanation}</p>
-          </div>
+    <!-- 4. Rationale Section (Flat) -->
+    <div class="rationale-section">
+      <div class="rationale-header">Decision Rationale</div>
+      <ul class="rationale-list">
+        <!-- Transforming explanation text to bullets if possible, or using matched patterns + explanation -->
+        ${rag.matched_patterns.map(p => `<li class="rationale-item"><span class="rationale-bullet">•</span> Pattern Detected: ${p}</li>`).join('')}
+        <li class="rationale-item"><span class="rationale-bullet">•</span> ${rag.explanation}</li>
+      </ul>
+    </div>
 
-          <div class="matched-patterns-section">
-            <h4>Matched Patterns (Knowledge Base)</h4>
-            <div class="pattern-chips">
-              ${rag.matched_patterns.map(p => `<span class="pattern-chip" onclick="openPatternSource('${p}')">${p}</span>`).join('')}
+    <!-- 5. Interpretation / Why (Flat Grid) -->
+    <div class="workspace-container" style="padding-top:32px">
+        <div class="rationale-header">Risk Indicators</div>
+        <div class="interpretation-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+        ${rag.matched_patterns.map(p => `
+        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
+            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">⚠️</div>
+            <div class="interpretation-content">
+            <h4 style="font-size:14px">${p}</h4>
+            <p style="font-size:12px">detected in transcript</p>
             </div>
-          </div>
-          
-          ${rag.regulatory_flags.length > 0 ? `<div class="regulatory-flags">
-            <h4>Regulatory Flags</h4>
-            <ul>${rag.regulatory_flags.map(f => `<li>${f}</li>`).join('')}</ul>
-          </div>` : ''}
-
-          <div class="recommendation-block">
-            <h4>Recommended Action</h4>
-            <div class="primary-action-area">
-              ${renderPrimaryAction(rag.recommended_action, call.call_id)}
-            </div>
-            <p class="recommendation-rationale">Rationale: ${rag.explanation.split('.')[0]}.</p>
-          </div>
+        </div>`).join('')}
         </div>
+    </div>
 
-        <div class="secondary-actions-panel">
-          <button class="btn-secondary" onclick="logAction('${call.call_id}', 'callback')">Schedule Callback</button>
-          <button class="btn-secondary" onclick="logAction('${call.call_id}', 'crm_note')">Add CRM Note</button>
-          <button class="btn-secondary" onclick="logAction('${call.call_id}', 'false_positive')">Mark False Positive</button>
+    <!-- 6. Evidence (Flat) -->
+    <div class="evidence-flat">
+      <button class="evidence-toggle" onclick="toggleEvidence(this)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        Evidence (Transcript)
+      </button>
+      <div class="evidence-content hidden">
+        <div class="transcript-panel" style="border:none;padding:0;margin-top:16px;background:transparent">
+           ${mockTranscript.map(t => `<div class="transcript-line ${t.highlight || ''}"><span class="time">${t.time}</span><span class="speaker">${t.speaker}:</span><span class="text">${t.text}</span></div>`).join('')}
         </div>
       </div>
     </div>
+
   </div>`;
+}
+
+function renderActionButtons(action, callId) {
+  // Strict Hierarchy: Solid > Outline > Ghost
+  return `
+    <button class="btn-primary-solid" onclick="escalateCase('${callId}')">Escalate to Compliance</button>
+    <button class="btn-secondary-outline" onclick="logAction('${callId}', 'callback')">Schedule Callback</button>
+    <button class="btn-tertiary-ghost" onclick="markForMonitoring('${callId}')">Mark as Safe</button>
+  `;
+}
+
+window.toggleEvidence = function (btn) {
+  const content = btn.nextElementSibling;
+  content.classList.toggle('hidden');
+  btn.classList.toggle('collapsed');
+  // Rotate icon handling via CSS
 }
 
 function renderPrimaryAction(action, callId) {

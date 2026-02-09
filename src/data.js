@@ -76,7 +76,7 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e5f1',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
     customer_id: 'CUST-5593',
-    customer_name: 'Sunita R.',
+    customer_name: 'Rahul Sharma',
     phone_masked: '+91-XXXX-9876',
     duration: '5:47',
     input_risk_assessment: {
@@ -84,6 +84,9 @@ export const mockCalls = [
       fraud_likelihood: 'high',
       confidence: 0.89
     },
+    loan_id: "LN20391",
+    previous_calls_count: 2,
+    voice_match_confidence: 0.87,
     rag_output: {
       grounded_assessment: 'high_risk',
       explanation: 'Customer used aggressive language and threatened legal action when asked for payment. This matches the "Dispute Escalation with Aggression" pattern.',
