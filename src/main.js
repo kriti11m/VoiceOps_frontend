@@ -360,38 +360,59 @@ function renderCallCard(call, index = 0) {
   const risk = call.input_risk_assessment;
   const rag = call.rag_output;
   const riskLevel = rag.grounded_assessment === 'high_risk' ? 'high' : (rag.grounded_assessment === 'medium_risk' ? 'medium' : 'low');
+  const riskLabel = riskLevel === 'high' ? 'HIGH RISK' : riskLevel === 'medium' ? 'MEDIUM' : 'LOW RISK';
 
-  return `<div class="call-card" data-call-id="${call.call_id}" style="animation-delay: ${index * 0.1}s">
-    <div class="call-card-content">
-      <!-- Left: Verdict -->
-      <div class="risk-badge-large ${riskLevel}" style="min-width:90px;text-align:center">
-        <span class="score">${risk.risk_score}</span>
-        <span class="label" style="font-size:10px">${riskLevel.toUpperCase()}</span>
-      </div>
-      
-      <!-- Center: Pattern & Rationale -->
-      <div class="case-info" style="flex:1;padding-left:16px">
-        <div class="case-header" style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-           <strong style="color:var(--text-primary);font-size:16px">${rag.matched_patterns[0] || 'Pattern Detected'}</strong>
-           <span class="case-id-badge" style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);background:var(--bg-elevated);padding:2px 6px;border-radius:4px;border:1px solid var(--border-color)">${call.call_id}</span>
+  return `<div class="call-card" data-call-id="${call.call_id}" style="animation-delay: ${index * 0.08}s">
+    
+    <!-- Risk Accent Strip -->
+    <div class="card-risk-strip ${riskLevel}"></div>
+    
+    <div class="card-body">
+      <!-- Top Row: Risk Score + Pattern Title + Status Tag -->
+      <div class="card-top-row">
+        <div class="card-risk-score ${riskLevel}">
+          <span class="card-score-number">${risk.risk_score}</span>
         </div>
-        <p style="margin:0;font-size:13px;color:var(--text-secondary);line-height:1.4;max-width:90%">
-          ${rag.explanation.substring(0, 110)}...
-        </p>
-        <div class="case-meta" style="margin-top:10px;font-size:12px;color:var(--text-secondary);display:flex;gap:16px;align-items:center">
-          <span>${timeAgo(new Date(call.call_timestamp))}</span>
-          <span style="opacity:0.3">|</span>
-          <span>Confidence: ${Math.round(rag.confidence * 100)}%</span>
-          <span style="opacity:0.3">|</span>
-          <span>${call.customer_name || 'Unknown Customer'}</span>
+        <div class="card-title-area">
+          <h3 class="card-pattern-title">${rag.matched_patterns[0] || 'Pattern Detected'}</h3>
+          <span class="card-risk-tag ${riskLevel}">${riskLabel}</span>
         </div>
-      </div>
-      
-      <!-- Right: Action -->
-      <div class="rag-summary" style="align-items:flex-end;min-width:auto;padding-left:24px;border-left:1px solid var(--border-color)">
-        <button class="btn-review" onclick="openCallInvestigation('${call.call_id}')">
-          Open Case <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <button class="card-open-btn" onclick="event.stopPropagation(); openCallInvestigation('${call.call_id}')">
+          Open Case
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
+      </div>
+      
+      <!-- Description -->
+      <p class="card-description">${rag.explanation.substring(0, 140)}${rag.explanation.length > 140 ? '...' : ''}</p>
+      
+      <!-- Bottom Row: Meta Info + Pattern Pills -->
+      <div class="card-bottom-row">
+        <div class="card-meta-items">
+          <span class="card-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+            ${timeAgo(new Date(call.call_timestamp))}
+          </span>
+          <span class="card-meta-divider"></span>
+          <span class="card-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            ${call.customer_name || 'Unknown'}
+          </span>
+          <span class="card-meta-divider"></span>
+          <span class="card-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+            ${Math.round(rag.confidence * 100)}% confidence
+          </span>
+        </div>
+        <div class="card-pattern-pills">
+          ${rag.matched_patterns.slice(0, 2).map(p => `<span class="card-pill">${p}</span>`).join('')}
+        </div>
+      </div>
+      
+      <!-- Case ID Footer -->
+      <div class="card-id-row">
+        <span class="card-case-id">${call.call_id}</span>
+        <span class="card-duration">${call.duration}</span>
       </div>
     </div>
   </div>`;

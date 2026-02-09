@@ -118,21 +118,13 @@
     animation: slideUp 0.5s ease-out forwards;
 }
 
-/* Call Cards - Staggered entrance applied in main.js via loop index, 
-   but defaults here */
+/* Call Cards - Staggered entrance */
 .call-card {
     opacity: 0;
-    /* Handled by animation */
-    animation: slideUp 0.5s ease-out forwards;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    animation: slideUp 0.45s ease-out forwards;
 }
 
-.call-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
-    border-color: var(--accent-blue);
-    z-index: 10;
-}
+/* Hover handled in components.css — no override here */
 
 /* Risk Queue Table Rows */
 .risk-table tbody tr {
@@ -182,13 +174,10 @@ button:active {
 
 .nav-item:hover {
     background: rgba(255, 255, 255, 0.05);
-    transform: translateX(4px);
+    transform: translateX(2px);
 }
 
-.nav-item.active {
-    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), transparent);
-    border-left: 3px solid var(--accent-blue);
-}
+/* Active state is handled by index.css — do not override here */
 
 /* Stagger Animation Delays (up to 10 items) */
 .stagger-1 {
