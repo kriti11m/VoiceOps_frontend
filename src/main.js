@@ -365,7 +365,13 @@ function renderCallCard(call, index = 0) {
     <div class="card-risk-strip ${riskLevel}"></div>
     
     <div class="card-body">
-      <!-- Top Row: Risk Score + Pattern Title + Status Tag -->
+      <!-- Call ID Header -->
+      <div class="card-id-header">
+        <span class="card-call-id-label">${call.call_id}</span>
+        <span class="card-timestamp">${timeAgo(new Date(call.call_timestamp))}</span>
+      </div>
+
+      <!-- Main Row: Risk Score + Pattern Title + Status Tag + Open Button -->
       <div class="card-top-row">
         <div class="card-risk-score ${riskLevel}">
           <span class="card-score-number">${risk.risk_score}</span>
@@ -381,35 +387,24 @@ function renderCallCard(call, index = 0) {
       </div>
       
       <!-- Description -->
-      <p class="card-description">${rag.explanation.substring(0, 140)}${rag.explanation.length > 140 ? '...' : ''}</p>
+      <p class="card-description">${rag.explanation.substring(0, 160)}${rag.explanation.length > 160 ? '...' : ''}</p>
       
-      <!-- Bottom Row: Meta Info + Pattern Pills -->
+      <!-- Bottom Row: Confidence + Duration + Pattern Pills -->
       <div class="card-bottom-row">
         <div class="card-meta-items">
           <span class="card-meta-item">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-            ${timeAgo(new Date(call.call_timestamp))}
-          </span>
-          <span class="card-meta-divider"></span>
-          <span class="card-meta-item">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-            ${call.call_id}
-          </span>
-          <span class="card-meta-divider"></span>
-          <span class="card-meta-item">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
             ${Math.round(rag.confidence * 100)}% confidence
+          </span>
+          <span class="card-meta-divider"></span>
+          <span class="card-meta-item">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+            ${call.duration || 'N/A'}
           </span>
         </div>
         <div class="card-pattern-pills">
           ${rag.matched_patterns.slice(0, 2).map(p => `<span class="card-pill">${p}</span>`).join('')}
         </div>
-      </div>
-      
-      <!-- Case ID Footer -->
-      <div class="card-id-row">
-        <span class="card-case-id">${new Date(call.call_timestamp).toLocaleString()}</span>
-        <span class="card-duration">${call.duration || ''}</span>
       </div>
     </div>
   </div>`;
