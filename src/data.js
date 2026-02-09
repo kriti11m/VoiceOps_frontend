@@ -5,7 +5,6 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e6c2',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), // 5 mins ago
     customer_id: 'CUST-8492',
-    customer_name: 'Rajesh S.',
     phone_masked: '+91-XXXX-4321', // PII Masked
     duration: '4:32',
     input_risk_assessment: {
@@ -28,7 +27,6 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e6b8',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
     customer_id: 'CUST-3921',
-    customer_name: 'Priya P.',
     phone_masked: '+91-XXXX-2109',
     duration: '2:18',
     input_risk_assessment: {
@@ -51,7 +49,6 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e6a4',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 mins ago
     customer_id: 'CUST-1102',
-    customer_name: 'Amit K.',
     phone_masked: '+91-XXXX-0987',
     duration: '1:45',
     input_risk_assessment: {
@@ -76,7 +73,6 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e5f1',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
     customer_id: 'CUST-5593',
-    customer_name: 'Rahul Sharma',
     phone_masked: '+91-XXXX-9876',
     duration: '5:47',
     input_risk_assessment: {
@@ -104,7 +100,6 @@ export const mockCalls = [
     call_id: 'call_2026_02_09_09e4d0',
     call_timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(), // 4 hours ago
     customer_id: 'CUST-7721',
-    customer_name: 'Vikram S.',
     phone_masked: '+91-XXXX-8765',
     duration: '3:22',
     input_risk_assessment: {

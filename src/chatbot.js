@@ -1,4 +1,7 @@
 // VoiceOps AI Assistant Chatbot Module
+
+const API_BASE_URL = 'https://afb1-2409-40f4-40d7-a60c-74de-7968-e0be-e422.ngrok-free.app';
+
 export class VoiceOpsAssistant {
   constructor() {
     this.conversations = new Map(); // Store conversations by page/context
@@ -62,7 +65,7 @@ export class VoiceOpsAssistant {
           <textarea 
             class="chat-input" 
             id="chat-input" 
-            placeholder="Ask about risk patterns, compliance guidelines, or case analysis..."
+            placeholder=“Ask about risks, compliance, or cases…”
             rows="1"
           ></textarea>
           <button class="send-btn" id="send-btn" type="button">
@@ -186,7 +189,7 @@ export class VoiceOpsAssistant {
     this.showTypingIndicator();
 
     try {
-      // Simulate AI processing (in real app, this would call your AI service)
+      // Call AI backend API (falls back to local responses if API is unreachable)
       const response = await this.processMessage(message);
       
       // Remove typing indicator and add AI response
@@ -212,9 +215,74 @@ export class VoiceOpsAssistant {
 
   // Process the message and generate AI response
   async processMessage(message) {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1200));
+    try {
+      const response = await this.callAPI(message);
+      return response;
+    } catch (error) {
+      console.error('API call failed, using fallback:', error);
+      return this.getFallbackResponse(message);
+    }
+  }
 
+  // Call the real backend API
+  async callAPI(message) {
+    const payload = {
+      question: message
+    };
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Format the API response for our chat UI
+    return this.formatAPIResponse(data);
+  }
+
+  // Format the API response into our chat display structure
+  formatAPIResponse(data) {
+    // If the API returns a simple string answer
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    // If the API returns an object with an "answer" or "response" field
+    const answerText = data.answer || data.response || data.message || data.text || data.output || '';
+
+    if (!answerText) {
+      // Return the full object as a formatted string if no known key
+      return JSON.stringify(data, null, 2);
+    }
+
+    // Return as a structured response block for clean rendering
+    return {
+      type: 'api-response',
+      content: answerText,
+      // Include sources if the API returns them
+      ...(data.sources && {
+        sections: [{
+          title: '📚 Sources',
+          items: Array.isArray(data.sources)
+            ? data.sources.map(s => typeof s === 'string' ? s : (s.title || s.name || JSON.stringify(s)))
+            : [String(data.sources)]
+        }]
+      }),
+      // Include follow-up if provided
+      ...(data.follow_up && { recommendation: data.follow_up })
+    };
+  }
+
+  // Fallback responses when API is unreachable
+  getFallbackResponse(message) {
     const lowerMessage = message.toLowerCase();
     
     // Context-aware responses based on current page and message content
@@ -417,9 +485,9 @@ export class VoiceOpsAssistant {
         {
           title: '📊 Quick Facts',
           items: [
-            `Customer: ${call.customer_name || 'Unknown'}`,
+            `Call ID: ${call.call_id}`,
             `Risk Level: ${call.rag_output.grounded_assessment.replace('_', ' ')}`,
-            `Duration: ${call.duration}`,
+            `Duration: ${call.duration || 'N/A'}`,
             `Timestamp: ${new Date(call.call_timestamp).toLocaleString()}`
           ]
         }
@@ -488,7 +556,8 @@ export class VoiceOpsAssistant {
   // Format AI response based on type
   formatAIResponse(response) {
     if (typeof response === 'string') {
-      return response;
+      // Convert markdown-like formatting to HTML
+      return `<div class="ai-response-block"><p>${this.renderMarkdown(response)}</p></div>`;
     }
 
     if (response.type === 'error') {
@@ -498,7 +567,12 @@ export class VoiceOpsAssistant {
     let html = `<div class="ai-response-block">`;
     
     if (response.content) {
-      html += `<p>${response.content}</p>`;
+      // For API responses, the content may be longer text — render with markdown support
+      if (response.type === 'api-response') {
+        html += `<div class="ai-api-content">${this.renderMarkdown(response.content)}</div>`;
+      } else {
+        html += `<p>${response.content}</p>`;
+      }
     }
 
     if (response.sections) {
@@ -520,6 +594,33 @@ export class VoiceOpsAssistant {
 
     html += `</div>`;
     return html;
+  }
+
+  // Simple markdown-to-HTML renderer for API responses
+  renderMarkdown(text) {
+    if (!text) return '';
+    return text
+      // Code blocks (```...```)
+      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Bold
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Bullet lists (lines starting with - or *)
+      .replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      // Numbered lists
+      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      // Headers
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      // Line breaks (double newline → paragraph break)
+      .replace(/\n\n/g, '</p><p>')
+      // Single newlines → <br>
+      .replace(/\n/g, '<br>');
   }
 
   // Show typing indicator

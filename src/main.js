@@ -185,9 +185,6 @@ function startProcessing(fileName) {
       const newCall = {
         call_id: `call_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Math.random().toString(16).substr(2, 6)}`,
         call_timestamp: new Date().toISOString(),
-        customer_id: 'CUST-NEW',
-        customer_name: 'Unknown Caller',
-        phone_masked: '+91-XXXX-9999',
         duration: '0:45', // Simulation duration
         input_risk_assessment: {
           risk_score: 85,
@@ -395,8 +392,8 @@ function renderCallCard(call, index = 0) {
           </span>
           <span class="card-meta-divider"></span>
           <span class="card-meta-item">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            ${call.customer_name || 'Unknown'}
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            ${call.call_id}
           </span>
           <span class="card-meta-divider"></span>
           <span class="card-meta-item">
@@ -411,8 +408,8 @@ function renderCallCard(call, index = 0) {
       
       <!-- Case ID Footer -->
       <div class="card-id-row">
-        <span class="card-case-id">${call.call_id}</span>
-        <span class="card-duration">${call.duration}</span>
+        <span class="card-case-id">${new Date(call.call_timestamp).toLocaleString()}</span>
+        <span class="card-duration">${call.duration || ''}</span>
       </div>
     </div>
   </div>`;
@@ -507,18 +504,18 @@ function renderInvestigationPage() {
     <!-- 2. Identity Bar (Sticky) -->
     <div class="identity-bar">
       <div class="identity-main">
-        <span class="identity-name">${call.customer_name || 'Unknown Customer'}</span>
-        <span class="identity-phone">${call.phone_masked}</span>
+        <span class="identity-name">${call.call_id}</span>
+        <span class="identity-phone">${call.phone_masked || ''}</span>
       </div>
       <div class="identity-meta">
-        <div class="meta-item" title="Loan ID">
-          <span class="meta-icon">📄</span> ${call.loan_id || 'N/A'}
+        <div class="meta-item" title="Timestamp">
+          <span class="meta-icon">�</span> ${new Date(call.call_timestamp).toLocaleString()}
         </div>
-        <div class="meta-item" title="Interaction History">
-          <span class="meta-icon">clock</span> ${call.previous_calls_count || 0} Previous Calls
+        <div class="meta-item" title="Duration">
+          <span class="meta-icon">⏱️</span> ${call.duration || 'N/A'}
         </div>
-        <div class="meta-item" title="Voice Biometrics">
-           <span class="meta-icon">🎙️</span> Voice Match ${Math.round((call.voice_match_confidence || 0) * 100)}%
+        <div class="meta-item" title="Fraud Likelihood">
+           <span class="meta-icon">�</span> ${call.input_risk_assessment.fraud_likelihood.toUpperCase()}
         </div>
       </div>
     </div>
