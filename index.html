@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,8 +8,11 @@
   <title>VoiceOps | Operational Intelligence Console</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
 </head>
+
 <body>
   <div id="app">
     <!-- Sidebar -->
@@ -16,19 +20,28 @@
       <div class="sidebar-logo">
         <div class="logo-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+            <path d="M2 17l10 5 10-5" />
+            <path d="M2 12l10 5 10-5" />
           </svg>
         </div>
         <span class="logo-text">VoiceOps</span>
       </div>
       <nav class="sidebar-nav" id="sidebar-nav"></nav>
-      <div class="sidebar-footer"><div class="version">v2.4.1</div></div>
+      <div class="sidebar-footer">
+        <div class="version">v2.4.1</div>
+      </div>
     </aside>
 
     <!-- Main Content -->
     <div class="main-wrapper">
-      <header class="header" id="header"></header>
-      <main class="content" id="content"></main>
+      <div class="workspace-layout">
+        <div class="main-area">
+          <header class="header" id="header"></header>
+          <main class="content" id="content"></main>
+        </div>
+        <aside class="assistant-panel" id="assistant-panel"></aside>
+      </div>
     </div>
   </div>
 
@@ -49,4 +62,5 @@
 
   <script type="module" src="/src/main.js"></script>
 </body>
+
 </html>
