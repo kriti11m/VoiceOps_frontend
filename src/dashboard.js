@@ -1,149 +1,64 @@
 // VoiceOps Dashboard Module
-// Connects to backend API with graceful fallback to mock data
+// Connects to backend API — no mock data fallbacks
 
-const API_BASE_URL = 'https://afb1-2409-40f4-40d7-a60c-74de-7968-e0be-e422.ngrok-free.app';
+import { getDashboardStats, getRecentActivity, getTopPatterns, getActiveCases, getSystemHealth, liveStore } from './api.js';
 
-// ─── API Layer ──────────────────────────────────────────────
-
-async function fetchAPI(endpoint) {
-  try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: { 'ngrok-skip-browser-warning': 'true' }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.warn(`[Dashboard] API ${endpoint} unavailable, using mock data`, err.message);
-    return null;
-  }
-}
-
-export async function fetchDashboardStats() {
-  const data = await fetchAPI('/dashboard/stats');
-  if (data) return data;
-
-  // Fallback: compute from mockCalls
-  const calls = window.mockCalls || [];
-  const high = calls.filter(c => c.rag_output.grounded_assessment === 'high_risk').length;
-  const medium = calls.filter(c => c.rag_output.grounded_assessment === 'medium_risk').length;
-  const low = calls.filter(c => c.rag_output.grounded_assessment === 'low_risk').length;
-  const avgScore = calls.length ? Math.round(calls.reduce((s, c) => s + c.input_risk_assessment.risk_score, 0) / calls.length) : 0;
-  const resolved = calls.filter(c => c.automations && c.automations.length > 0).length;
-  const resolutionRate = calls.length ? Math.round((resolved / calls.length) * 100) : 0;
-
-  return {
-    total_calls: calls.length,
-    high_risk: high,
-    medium_risk: medium,
-    low_risk: low,
-    avg_risk_score: avgScore,
-    resolution_rate: resolutionRate
-  };
-}
-
-export async function fetchRecentActivity() {
-  const data = await fetchAPI('/dashboard/recent-activity');
-  if (data) return data;
-
-  // Fallback
-  const logs = window.mockWorkflowLogs || [];
-  return logs.slice(0, 5).map(log => ({
-    id: log.id,
-    call_id: log.call_id,
-    action: log.action,
-    reason: log.reason || log.detail || '',
-    timestamp: log.timestamp,
-    type: log.type || 'crm',
-    status: log.status
-  }));
-}
-
-export async function fetchTopPatterns() {
-  const data = await fetchAPI('/dashboard/top-patterns');
-  if (data) return data;
-
-  // Fallback: aggregate from mockCalls
-  const calls = window.mockCalls || [];
-  const patternMap = {};
-  calls.forEach(c => {
-    (c.rag_output.matched_patterns || []).forEach(p => {
-      patternMap[p] = (patternMap[p] || 0) + 1;
-    });
-  });
-
-  return Object.entries(patternMap)
-    .map(([pattern, count]) => ({ pattern, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 6);
-}
-
-export async function fetchActiveCases() {
-  const data = await fetchAPI('/dashboard/active-cases');
-  if (data) return data;
-
-  // Fallback: top 3 highest risk
-  const calls = window.mockCalls || [];
-  return [...calls]
-    .sort((a, b) => b.input_risk_assessment.risk_score - a.input_risk_assessment.risk_score)
-    .slice(0, 3);
-}
-
-export async function fetchSystemHealth() {
-  const data = await fetchAPI('/dashboard/health');
-  if (data) return data;
-
-  // Fallback
-  return {
-    status: 'operational',
-    pipeline: 'healthy',
-    uptime: '99.8%',
-    last_call_processed: window.mockCalls?.[0]?.call_timestamp || new Date().toISOString(),
-    avg_processing_time: '2.3s'
-  };
-}
+export { getDashboardStats as fetchDashboardStats };
+export { getRecentActivity as fetchRecentActivity };
+export { getTopPatterns as fetchTopPatterns };
+export { getActiveCases as fetchActiveCases };
+export { getSystemHealth as fetchSystemHealth };
 
 // ─── Render Dashboard ───────────────────────────────────────
 
 export async function renderDashboard() {
-  // Show skeleton immediately
-  const skeleton = renderSkeleton();
-
-  // Fetch all data in parallel
-  const [stats, activity, patterns, cases, health] = await Promise.all([
-    fetchDashboardStats(),
-    fetchRecentActivity(),
-    fetchTopPatterns(),
-    fetchActiveCases(),
-    fetchSystemHealth()
+  // Fetch all data in parallel from API
+  const [statsRaw, activityRaw, patternsRaw, casesRaw, health] = await Promise.all([
+    getDashboardStats().catch(() => ({ total_calls: 0, high_risk: 0, avg_risk_score: 0, resolution_rate: 0 })),
+    getRecentActivity().catch(() => []),
+    getTopPatterns().catch(() => []),
+    getActiveCases().catch(() => []),
+    getSystemHealth().catch(() => ({ status: 'unknown', uptime: '--', avg_processing_time: '--' }))
   ]);
+
+  // Normalize: APIs may return wrapped objects or plain arrays
+  const stats = statsRaw?.stats || statsRaw || { total_calls: 0, high_risk_count: 0, avg_risk_score: 0, resolution_rate: 0 };
+  const activity = Array.isArray(activityRaw) ? activityRaw : (activityRaw?.activity || activityRaw?.recent_activity || []);
+  const patterns = Array.isArray(patternsRaw) ? patternsRaw : (patternsRaw?.patterns || patternsRaw?.top_patterns || []);
+  const cases = Array.isArray(casesRaw) ? casesRaw : (casesRaw?.cases || casesRaw?.active_cases || []);
+
+  // Store fetched cases for other modules
+  if (Array.isArray(cases) && cases.length) {
+    liveStore.setCalls(cases);
+  }
 
   return `
     <div class="dashboard-page">
       
       <!-- System Health Bar -->
       <div class="dash-health-bar">
-        <div class="dash-health-status ${health.status === 'operational' ? 'online' : 'degraded'}">
+        <div class="dash-health-status ${health.status === 'healthy' ? 'online' : 'degraded'}">
           <span class="dash-health-dot"></span>
-          <span>All Systems ${health.status === 'operational' ? 'Operational' : 'Degraded'}</span>
+          <span>All Systems ${health.status === 'healthy' ? 'Operational' : 'Degraded'}</span>
         </div>
         <div class="dash-health-meta">
           <span class="dash-health-item">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-            Uptime ${health.uptime || '99.8%'}
+            ${health.components?.database || 'unknown'}
           </span>
           <span class="dash-health-item">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-            Avg Processing ${health.avg_processing_time || '2.3s'}
+            ${health.components?.knowledge_base || 'unknown'}
           </span>
         </div>
       </div>
 
       <!-- KPI Stats Row -->
       <div class="dash-stats-row">
-        ${renderStatCard('Total Calls', stats.total_calls, 'today', 'blue', `<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>`)}
-        ${renderStatCard('High Risk', stats.high_risk, 'needs attention', 'red', `<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`)}
-        ${renderStatCard('Avg Risk Score', stats.avg_risk_score, 'across all calls', getScoreColor(stats.avg_risk_score), `<path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/>`)}
-        ${renderStatCard('Resolution Rate', stats.resolution_rate + '%', 'cases resolved', 'green', `<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>`)}
+        ${renderStatCard('Total Calls', stats.total_calls ?? 0, `${stats.total_calls_today ?? 0} today`, 'blue', `<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>`)}
+        ${renderStatCard('High Risk', stats.high_risk_count ?? 0, 'needs attention', 'red', `<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`)}
+        ${renderStatCard('Avg Risk Score', stats.avg_risk_score ?? 0, 'across all calls', getScoreColor(stats.avg_risk_score), `<path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/>`)}
+        ${renderStatCard('Resolution Rate', (stats.resolution_rate ?? 0) + '%', 'cases resolved', 'green', `<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>`)}
       </div>
 
       <!-- Main Grid: Activity + Patterns -->
@@ -172,7 +87,7 @@ export async function renderDashboard() {
             </h3>
           </div>
           <div class="dash-patterns-list">
-            ${patterns.length ? patterns.map((p, i) => renderPatternItem(p, i, patterns[0].count)).join('') : '<p class="dash-empty-text">No patterns detected yet</p>'}
+            ${patterns.length ? patterns.map((p, i) => renderPatternItem(p, i, patterns[0]?.match_count || patterns[0]?.count || 1)).join('') : '<p class="dash-empty-text">No patterns detected yet</p>'}
           </div>
         </div>
       </div>
@@ -235,27 +150,29 @@ function renderStatCard(label, value, subtitle, color, iconSvg) {
 }
 
 function renderActivityItem(activity, index) {
+  // Map grounded_assessment to visual type
+  const assessment = activity.grounded_assessment || '';
+  const riskLevel = assessment === 'high_risk' ? 'high' : (assessment === 'medium_risk' ? 'medium' : 'low');
   const typeIcons = {
-    escalation: '🚨',
-    crm: '📋',
-    callback: '📞',
-    slack: '💬',
-    manual_review: '👁️',
-    monitor: '📡'
+    high: '�',
+    medium: '⚠️',
+    low: '✅'
   };
-  const icon = typeIcons[activity.type] || '📋';
-  const timeStr = timeAgoShort(new Date(activity.timestamp));
+  const icon = typeIcons[riskLevel] || '📋';
+  const timeStr = activity.call_timestamp ? timeAgoShort(new Date(activity.call_timestamp)) : '--';
+  const actionLabel = activity.status ? activity.status.replace('_', ' ').toUpperCase() : 'PROCESSED';
+  const detail = activity.summary_for_rag || activity.reason || '';
 
   return `
     <div class="dash-activity-item" style="animation-delay: ${index * 0.06}s">
-      <div class="dash-activity-icon ${activity.type || ''}">${icon}</div>
+      <div class="dash-activity-icon ${riskLevel}">${icon}</div>
       <div class="dash-activity-content">
-        <span class="dash-activity-action">${activity.action}</span>
-        <span class="dash-activity-detail">${activity.reason || activity.call_id}</span>
+        <span class="dash-activity-action">${actionLabel} — Risk: ${activity.risk_score ?? '--'}</span>
+        <span class="dash-activity-detail">${detail.substring(0, 80)}${detail.length > 80 ? '...' : ''}</span>
       </div>
       <div class="dash-activity-time">
         <span class="dash-activity-timestamp">${timeStr}</span>
-        <span class="dash-activity-callid" onclick="openCallInvestigation('${activity.call_id}')">${activity.call_id?.substring(0, 20) || ''}</span>
+        <span class="dash-activity-callid" onclick="openCallInvestigation('${activity.call_id}')">${activity.call_id?.substring(0, 24) || ''}</span>
       </div>
     </div>
   `;
@@ -269,12 +186,13 @@ function renderEmptyActivity() {
 }
 
 function renderPatternItem(pattern, index, maxCount) {
-  const barWidth = maxCount ? Math.max(20, (pattern.count / maxCount) * 100) : 20;
+  const count = pattern.match_count ?? pattern.count ?? 0;
+  const barWidth = maxCount ? Math.max(20, (count / maxCount) * 100) : 20;
   return `
     <div class="dash-pattern-item" style="animation-delay: ${index * 0.06}s">
       <div class="dash-pattern-info">
-        <span class="dash-pattern-name">${pattern.pattern}</span>
-        <span class="dash-pattern-count">${pattern.count}×</span>
+        <span class="dash-pattern-name">${pattern.pattern || pattern.name || 'Unknown'}</span>
+        <span class="dash-pattern-count">${count}×</span>
       </div>
       <div class="dash-pattern-bar-bg">
         <div class="dash-pattern-bar-fill" style="width: ${barWidth}%"></div>
@@ -284,25 +202,32 @@ function renderPatternItem(pattern, index, maxCount) {
 }
 
 function renderDashCaseCard(call, index) {
-  const risk = call.input_risk_assessment;
-  const rag = call.rag_output;
-  const riskLevel = rag.grounded_assessment === 'high_risk' ? 'high' : (rag.grounded_assessment === 'medium_risk' ? 'medium' : 'low');
+  if (!call) return '';
+  // Active-cases API returns flat fields: risk_score, grounded_assessment, etc.
+  // Full call API returns nested: input_risk_assessment.risk_score, rag_output.grounded_assessment
+  const riskScore = call.risk_score ?? call.input_risk_assessment?.risk_score ?? call.risk_assessment?.risk_score ?? '--';
+  const assessment = call.grounded_assessment || call.rag_output?.grounded_assessment || 'low_risk';
+  const explanation = call.summary_for_rag || call.rag_output?.explanation || 'No description available';
+  const confidence = call.rag_output?.confidence ?? call.risk_assessment?.confidence ?? call.confidence ?? null;
+  const matchedPatterns = call.rag_output?.matched_patterns || [];
+  
+  const riskLevel = assessment === 'high_risk' ? 'high' : (assessment === 'medium_risk' ? 'medium' : 'low');
   const riskLabel = riskLevel === 'high' ? 'HIGH' : riskLevel === 'medium' ? 'MED' : 'LOW';
 
   return `
     <div class="dash-case-card ${riskLevel}" style="animation-delay: ${index * 0.08}s" onclick="openCallInvestigation('${call.call_id}')">
       <div class="dash-case-top">
-        <div class="dash-case-score ${riskLevel}">${risk.risk_score}</div>
+        <div class="dash-case-score ${riskLevel}">${riskScore}</div>
         <div class="dash-case-info">
-          <span class="dash-case-id">${call.call_id}</span>
-          <span class="dash-case-pattern">${rag.matched_patterns?.[0] || 'Pattern Detected'}</span>
+          <span class="dash-case-id">${call.call_id || 'Unknown'}</span>
+          <span class="dash-case-pattern">${matchedPatterns[0] || call.recommended_action?.replace(/_/g, ' ') || 'Pattern Detected'}</span>
         </div>
         <span class="dash-case-tag ${riskLevel}">${riskLabel}</span>
       </div>
-      <p class="dash-case-desc">${rag.explanation?.substring(0, 100)}${rag.explanation?.length > 100 ? '...' : ''}</p>
+      <p class="dash-case-desc">${explanation.substring(0, 100)}${explanation.length > 100 ? '...' : ''}</p>
       <div class="dash-case-footer">
-        <span>${timeAgoShort(new Date(call.call_timestamp))}</span>
-        <span>${Math.round(rag.confidence * 100)}% conf</span>
+        <span>${call.call_timestamp ? timeAgoShort(new Date(call.call_timestamp)) : '--'}</span>
+        <span>${confidence ? Math.round(confidence * 100) + '% conf' : (call.fraud_likelihood || '--')}</span>
       </div>
     </div>
   `;

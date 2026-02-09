@@ -1,4 +1,4 @@
-// VoiceOps Main Application - Complete
+// VoiceOps Main Application - Complete (Live API)
 import './index.css';
 import './components.css';
 import './pages.css';
@@ -6,9 +6,10 @@ import './tables.css';
 import './animations.css';
 import './chatbot.css';
 import './dashboard.css';
-import { mockCalls, mockTranscript, mockWorkflowLogs, n8nWorkflowJSON } from './data.js';
+import { n8nWorkflowJSON } from './data.js';
 import VoiceOpsAssistant from './chatbot.js';
 import { renderDashboard } from './dashboard.js';
+import { getCalls, getCallById, getActiveCases, getRecentActivity, updateCallStatus, liveStore } from './api.js';
 
 // State
 let currentPage = 'dashboard';
@@ -21,11 +22,6 @@ const assistant = new VoiceOpsAssistant();
 
 // Make assistant globally available for easier debugging/integration
 window.voiceOpsAssistant = assistant;
-
-// Make mock data globally available for assistant
-window.mockCalls = mockCalls;
-window.mockTranscript = mockTranscript;
-window.mockWorkflowLogs = mockWorkflowLogs;
 
 // Navigation items
 const navItems = [
@@ -187,29 +183,7 @@ function startProcessing(fileName) {
       renderPage();
       setTimeout(advanceStep, stepDurations[currentStep]);
     } else {
-      // Complete - append new case and reset
-      const newCall = {
-        call_id: `call_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Math.random().toString(16).substr(2, 6)}`,
-        call_timestamp: new Date().toISOString(),
-        duration: '0:45', // Simulation duration
-        input_risk_assessment: {
-          risk_score: 85,
-          fraud_likelihood: 'high',
-          confidence: 0.88
-        },
-        rag_output: {
-          grounded_assessment: 'high_risk',
-          explanation: 'Simulation detected evasive answers regarding identity verification. Matches "Identity Concealment" pattern.',
-          recommended_action: 'escalate_to_compliance',
-          confidence: 0.92,
-          regulatory_flags: ['KYC Verification Needed'],
-          matched_patterns: ['Identity Concealment', 'Evasive Response']
-        },
-        status: 'complete',
-        automations: []
-      };
-
-      mockCalls.unshift(newCall);
+      // Complete - simulation finished, refresh from API
       processingState = null;
       renderPage();
     }
@@ -251,26 +225,33 @@ function setupUploadHandlers() {
 // Page rendering
 async function renderPage() {
   const content = document.getElementById('content');
+  // Show a loading skeleton for any page while fetching
+  const loadingSkeleton = '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted)"><p>Loading…</p></div>';
+
   switch (currentPage) {
     case 'dashboard':
       content.innerHTML = '<div class="dashboard-page"><div class="dash-stats-row">' + Array(4).fill('<div class="dash-stat-card skeleton"><div class="skeleton-shine"></div></div>').join('') + '</div></div>';
       content.innerHTML = await renderDashboard();
       break;
     case 'cases':
-      content.innerHTML = renderHomePage();
+      content.innerHTML = loadingSkeleton;
+      content.innerHTML = await renderHomePage();
       setupUploadHandlers();
       break;
     case 'risk-queue':
-      content.innerHTML = renderRiskQueuePage();
+      content.innerHTML = loadingSkeleton;
+      content.innerHTML = await renderRiskQueuePage();
       break;
     case 'workflow-logs':
-      content.innerHTML = renderWorkflowLogsPage();
+      content.innerHTML = loadingSkeleton;
+      content.innerHTML = await renderWorkflowLogsPage();
       break;
     case 'settings':
       content.innerHTML = renderSettingsPage();
       break;
     case 'investigation':
-      content.innerHTML = renderInvestigationPage();
+      content.innerHTML = loadingSkeleton;
+      content.innerHTML = await renderInvestigationPage();
       break;
     default:
       content.innerHTML = '<div class="dashboard-page"><div class="dash-stats-row">' + Array(4).fill('<div class="dash-stat-card skeleton"><div class="skeleton-shine"></div></div>').join('') + '</div></div>';
@@ -300,14 +281,29 @@ function getAutomationIcon(type) {
   return icons[type] || icons.crm;
 }
 
-// Home Page (Active Risk Cases)
-function renderHomePage() {
-  const highRiskCount = mockCalls.filter(c => c.rag_output.grounded_assessment === 'high_risk').length;
-  return `<div class="home-page">
-    ${renderStartAnalysisPanel()}
-    ${highRiskCount > 0 ? `<div class="risk-banner"><div class="risk-banner-content"><h2>${highRiskCount} Active High Risk Cases</h2><p>Requires immediate attention</p></div><div class="risk-banner-actions"><button class="btn-primary" onclick="navigateTo('risk-queue')">Review Queue</button></div></div>` : ''}
-    <div class="calls-grid">${mockCalls.map((c, i) => renderCallCard(c, i)).join('')}</div>
-  </div>`;
+// Home Page (Active Risk Cases) — fetches from /calls API
+async function renderHomePage() {
+  try {
+    const data = await getCalls({ page: 1, limit: 20, sort: 'recent' });
+    const calls = data.calls || data || [];
+    liveStore.setCalls(calls);
+
+    const highRiskCount = calls.filter(c => (c.grounded_assessment || c.rag_output?.grounded_assessment) === 'high_risk').length;
+    return `<div class="home-page">
+      ${renderStartAnalysisPanel()}
+      ${highRiskCount > 0 ? `<div class="risk-banner"><div class="risk-banner-content"><h2>${highRiskCount} Active High Risk Cases</h2><p>Requires immediate attention</p></div><div class="risk-banner-actions"><button class="btn-primary" onclick="navigateTo('risk-queue')">Review Queue</button></div></div>` : ''}
+      <div class="calls-grid">${calls.map((c, i) => renderCallCard(c, i)).join('')}</div>
+    </div>`;
+  } catch (err) {
+    console.error('[Cases] Failed to load calls:', err);
+    return `<div class="home-page">
+      ${renderStartAnalysisPanel()}
+      <div class="dash-empty-state" style="padding:40px;text-align:center">
+        <p style="color:var(--text-muted)">Unable to load cases. Backend may be unavailable.</p>
+        <button class="btn-primary" style="margin-top:12px" onclick="renderPage()">Retry</button>
+      </div>
+    </div>`;
+  }
 }
 
 function renderStartAnalysisPanel() {
@@ -365,9 +361,16 @@ function renderStartAnalysisPanel() {
 }
 
 function renderCallCard(call, index = 0) {
-  const risk = call.input_risk_assessment;
-  const rag = call.rag_output;
-  const riskLevel = rag.grounded_assessment === 'high_risk' ? 'high' : (rag.grounded_assessment === 'medium_risk' ? 'medium' : 'low');
+  if (!call) return '';
+  // /api/v1/calls returns flat fields; /api/v1/call/{id} returns nested objects
+  const riskScore = call.risk_score ?? call.input_risk_assessment?.risk_score ?? call.risk_assessment?.risk_score ?? '--';
+  const assessment = call.grounded_assessment || call.rag_output?.grounded_assessment || 'low_risk';
+  const explanation = call.summary_for_rag || call.rag_output?.explanation || 'No description available';
+  const confidence = call.rag_output?.confidence ?? call.risk_assessment?.confidence ?? call.confidence ?? null;
+  const patterns = call.rag_output?.matched_patterns || [];
+  const fraudLikelihood = call.fraud_likelihood || call.input_risk_assessment?.fraud_likelihood || '';
+  
+  const riskLevel = assessment === 'high_risk' ? 'high' : (assessment === 'medium_risk' ? 'medium' : 'low');
   const riskLabel = riskLevel === 'high' ? 'HIGH RISK' : riskLevel === 'medium' ? 'MEDIUM' : 'LOW RISK';
 
   return `<div class="call-card" data-call-id="${call.call_id}" style="animation-delay: ${index * 0.08}s">
@@ -378,17 +381,17 @@ function renderCallCard(call, index = 0) {
     <div class="card-body">
       <!-- Call ID Header -->
       <div class="card-id-header">
-        <span class="card-call-id-label">${call.call_id}</span>
-        <span class="card-timestamp">${timeAgo(new Date(call.call_timestamp))}</span>
+        <span class="card-call-id-label">${call.call_id || 'Unknown'}</span>
+        <span class="card-timestamp">${call.call_timestamp ? timeAgo(new Date(call.call_timestamp)) : '--'}</span>
       </div>
 
       <!-- Main Row: Risk Score + Pattern Title + Status Tag + Open Button -->
       <div class="card-top-row">
         <div class="card-risk-score ${riskLevel}">
-          <span class="card-score-number">${risk.risk_score}</span>
+          <span class="card-score-number">${riskScore}</span>
         </div>
         <div class="card-title-area">
-          <h3 class="card-pattern-title">${rag.matched_patterns[0] || 'Pattern Detected'}</h3>
+          <h3 class="card-pattern-title">${patterns[0] || call.recommended_action?.replace(/_/g, ' ') || 'Pattern Detected'}</h3>
           <span class="card-risk-tag ${riskLevel}">${riskLabel}</span>
         </div>
         <button class="card-open-btn" onclick="event.stopPropagation(); openCallInvestigation('${call.call_id}')">
@@ -398,104 +401,171 @@ function renderCallCard(call, index = 0) {
       </div>
       
       <!-- Description -->
-      <p class="card-description">${rag.explanation.substring(0, 160)}${rag.explanation.length > 160 ? '...' : ''}</p>
+      <p class="card-description">${explanation.substring(0, 160)}${explanation.length > 160 ? '...' : ''}</p>
       
       <!-- Bottom Row: Confidence + Duration + Pattern Pills -->
       <div class="card-bottom-row">
         <div class="card-meta-items">
           <span class="card-meta-item">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-            ${Math.round(rag.confidence * 100)}% confidence
+            ${confidence ? Math.round(confidence * 100) + '% confidence' : (fraudLikelihood || '--')}
           </span>
           <span class="card-meta-divider"></span>
           <span class="card-meta-item">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-            ${call.duration || 'N/A'}
+            ${call.status || call.duration || 'N/A'}
           </span>
         </div>
         <div class="card-pattern-pills">
-          ${rag.matched_patterns.slice(0, 2).map(p => `<span class="card-pill">${p}</span>`).join('')}
+          ${patterns.slice(0, 2).map(p => `<span class="card-pill">${p}</span>`).join('')}
         </div>
       </div>
     </div>
   </div>`;
 }
 
-function renderRiskQueuePage() {
-  const highRisk = mockCalls.filter(c => c.rag_output.grounded_assessment === 'high_risk' || c.rag_output.grounded_assessment === 'medium_risk');
-  return `<div class="risk-queue-page">
-    <h1>Risk Queue</h1>
-    <div class="bulk-actions"><span>0 selected</span><button class="btn-secondary" disabled>Escalate Selected</button><button class="btn-secondary" disabled>Assign Team</button><button class="btn-secondary" disabled>Send Reminder</button></div>
-    <table class="risk-table">
-      <thead><tr><th><input type="checkbox" class="checkbox"></th><th>Case ID</th><th>Risk Score</th><th>RAG Headline</th><th>Matched Patterns</th><th>Action</th></tr></thead>
-      <tbody>${highRisk.map((c, i) => {
-    const rag = c.rag_output;
-    const riskLevel = rag.grounded_assessment === 'high_risk' ? 'high' : 'medium';
-    return `<tr style="animation-delay: ${i * 0.05}s">
-        <td><input type="checkbox" class="checkbox"></td>
-        <td><div><strong>${c.call_id}</strong></div><div style="font-size:12px;color:var(--text-muted)">${timeAgo(new Date(c.call_timestamp))}</div></td>
-        <td><span class="table-risk-badge ${riskLevel}">${c.input_risk_assessment.risk_score}</span></td>
-        <td style="max-width:250px"><div class="rag-headline-cell"><strong>${riskLevel.toUpperCase().replace('_', ' ')}</strong> — ${rag.explanation.substring(0, 50)}...</div></td>
-        <td>${rag.matched_patterns.slice(0, 2).map(p => `<span class="pattern-pill-small">${p}</span>`).join('')}</td>
-        <td><button class="table-action-btn" onclick="openCallInvestigation('${c.call_id}')">Review</button></td>
-      </tr>`;
-  }).join('')}</tbody>
-    </table>
-  </div>`;
+async function renderRiskQueuePage() {
+  try {
+    const raw = await getActiveCases({ limit: 10 });
+    const allCalls = Array.isArray(raw) ? raw : (raw.cases || raw.active_cases || []);
+    // Active-cases returns flat fields: grounded_assessment, risk_score, etc.
+    const highRisk = allCalls.filter(c => {
+      const assessment = c.grounded_assessment || c.rag_output?.grounded_assessment || '';
+      return assessment === 'high_risk' || assessment === 'medium_risk';
+    });
+    liveStore.setCalls(allCalls);
+
+    return `<div class="risk-queue-page">
+      <h1>Risk Queue</h1>
+      <div class="bulk-actions"><span>0 selected</span><button class="btn-secondary" disabled>Escalate Selected</button><button class="btn-secondary" disabled>Assign Team</button><button class="btn-secondary" disabled>Send Reminder</button></div>
+      <table class="risk-table">
+        <thead><tr><th><input type="checkbox" class="checkbox"></th><th>Case ID</th><th>Risk Score</th><th>RAG Headline</th><th>Matched Patterns</th><th>Action</th></tr></thead>
+        <tbody>${highRisk.length ? highRisk.map((c, i) => {
+      const assessment = c.grounded_assessment || c.rag_output?.grounded_assessment || 'medium_risk';
+      const riskLevel = assessment === 'high_risk' ? 'high' : 'medium';
+      const riskScore = c.risk_score ?? c.input_risk_assessment?.risk_score ?? '--';
+      const explanation = c.summary_for_rag || c.rag_output?.explanation || 'No description';
+      const patterns = c.rag_output?.matched_patterns || [];
+      return `<tr style="animation-delay: ${i * 0.05}s">
+          <td><input type="checkbox" class="checkbox"></td>
+          <td><div><strong>${c.call_id || 'Unknown'}</strong></div><div style="font-size:12px;color:var(--text-muted)">${c.call_timestamp ? timeAgo(new Date(c.call_timestamp)) : '--'}</div></td>
+          <td><span class="table-risk-badge ${riskLevel}">${riskScore}</span></td>
+          <td style="max-width:250px"><div class="rag-headline-cell"><strong>${riskLevel.toUpperCase()}</strong> — ${explanation.substring(0, 50)}...</div></td>
+          <td>${patterns.length ? patterns.slice(0, 2).map(p => `<span class="pattern-pill-small">${p}</span>`).join('') : `<span class="pattern-pill-small">${c.recommended_action?.replace(/_/g, ' ') || 'N/A'}</span>`}</td>
+          <td><button class="table-action-btn" onclick="openCallInvestigation('${c.call_id}')">Review</button></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No high or medium risk cases found</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  } catch (err) {
+    console.error('[RiskQueue] Failed to load:', err);
+    return `<div class="risk-queue-page"><h1>Risk Queue</h1><p style="color:var(--text-muted);padding:24px;">Unable to load risk queue. Backend may be unavailable.</p></div>`;
+  }
 }
 
 // Action Helpers
-window.scheduleReview = function (callId) {
-  logAction(callId, 'manual_review');
-  alert(`Manual Review scheduled for ${callId}`);
+window.scheduleReview = async function (callId) {
+  try {
+    await updateCallStatus(callId, 'manual_review');
+    alert(`Manual Review scheduled for ${callId}`);
+  } catch (err) {
+    console.error('[scheduleReview] API failed:', err);
+    alert(`Manual Review scheduled for ${callId} (offline)`);
+  }
+  renderPage();
 }
 
-window.markForMonitoring = function (callId) {
-  logAction(callId, 'monitor');
-  alert(`${callId} marked for monitoring`);
+window.markForMonitoring = async function (callId) {
+  try {
+    await updateCallStatus(callId, 'safe');
+    alert(`${callId} marked as safe`);
+  } catch (err) {
+    console.error('[markForMonitoring] API failed:', err);
+    alert(`${callId} marked as safe (offline)`);
+  }
+  renderPage();
 }
 
-window.logAction = function (callId, type) {
-  const log = {
-    id: `log_${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    call_id: callId,
-    action: type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    reason: 'Manual User Action',
-    status: 'Success',
-    type: type
-  };
-  mockWorkflowLogs.unshift(log);
-  renderPage(); // Refresh logs view if open
+window.logAction = async function (callId, status) {
+  try {
+    await updateCallStatus(callId, status);
+    alert(`Status "${status}" applied to ${callId}`);
+  } catch (err) {
+    console.error('[logAction] API failed:', err);
+    alert(`Status "${status}" recorded for ${callId} (offline)`);
+  }
+  renderPage(); // Refresh the current view
 }
 
-function renderWorkflowLogsPage() {
-  return `<div class="workflow-logs-page">
-    <h1>Workflow Logs</h1>
-    <div class="logs-feed">${mockWorkflowLogs.map((log, i) => `<div class="log-entry" style="animation-delay: ${i * 0.03}s">
-      <div class="log-icon ${log.type || 'crm'}">${getAutomationIcon(log.type || 'crm')}</div>
-      <div class="log-content"><h4>${log.action}</h4><p>${log.reason || log.detail}</p></div>
-      <div class="log-meta"><div class="log-time">${timeAgo(new Date(log.timestamp))}</div><div class="log-call-id">${log.call_id}</div></div>
-    </div>`).join('')}</div>
-  </div>`;
+async function renderWorkflowLogsPage() {
+  try {
+    const activity = await getRecentActivity();
+    const logs = Array.isArray(activity) ? activity : [];
+    liveStore.setLogs(logs);
+
+    if (!logs.length) {
+      return `<div class="workflow-logs-page"><h1>Workflow Logs</h1><p style="color:var(--text-muted);padding:24px;">No workflow logs recorded yet.</p></div>`;
+    }
+
+    return `<div class="workflow-logs-page">
+      <h1>Workflow Logs</h1>
+      <div class="logs-feed">${logs.map((log, i) => {
+        const assessment = log.grounded_assessment || '';
+        const riskLevel = assessment === 'high_risk' ? 'high' : (assessment === 'medium_risk' ? 'medium' : 'low');
+        const iconType = assessment === 'high_risk' ? 'escalation' : (assessment === 'medium_risk' ? 'manual_review' : 'crm');
+        const actionLabel = log.status ? log.status.replace(/_/g, ' ').toUpperCase() : (log.action || 'PROCESSED');
+        const detail = log.summary_for_rag || log.reason || log.detail || log.summary || '';
+        const timeStr = log.call_timestamp || log.timestamp;
+        return `<div class="log-entry" style="animation-delay: ${i * 0.03}s">
+        <div class="log-icon ${iconType}">${getAutomationIcon(iconType)}</div>
+        <div class="log-content"><h4>${actionLabel} — Risk: ${log.risk_score ?? '--'}</h4><p>${detail.substring(0, 120)}${detail.length > 120 ? '...' : ''}</p></div>
+        <div class="log-meta"><div class="log-time">${timeStr ? timeAgo(new Date(timeStr)) : '--'}</div><div class="log-call-id">${log.call_id || ''}</div></div>
+      </div>`;
+      }).join('')}</div>
+    </div>`;
+  } catch (err) {
+    console.error('[WorkflowLogs] Failed to load:', err);
+    return `<div class="workflow-logs-page"><h1>Workflow Logs</h1><p style="color:var(--text-muted);padding:24px;">Unable to load workflow logs. Backend may be unavailable.</p></div>`;
+  }
 }
 
 function renderSettingsPage() {
   return `<div class="settings-page"><h1>Settings</h1><div class="settings-section"><h3>Risk Thresholds</h3><div class="settings-row"><div class="settings-label">High Risk Threshold<span>Score above this triggers immediate alert</span></div><input type="number" value="70" style="width:80px;padding:8px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);"></div><div class="settings-row"><div class="settings-label">Auto-escalate High Risk<span>Automatically escalate calls above threshold</span></div><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div></div><div class="settings-section"><h3>Notifications</h3><div class="settings-row"><div class="settings-label">Slack Alerts<span>Send high-risk alerts to Slack</span></div><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></div><div class="settings-row"><div class="settings-label">Email Digest<span>Daily summary of risk decisions</span></div><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span></label></div></div></div>`;
 }
 
-// Investigation Page (Split View)
-// Investigation Page (Phase 4: Compliance Workspace)
-function renderInvestigationPage() {
-  const call = mockCalls.find(c => c.call_id === selectedCallId);
-  if (!call) return renderHomePage();
+// Investigation Page (Phase 4: Compliance Workspace) — Live API
+async function renderInvestigationPage() {
+  // Always fetch fresh data from /api/v1/call/{call_id}
+  let call = null;
+  if (selectedCallId) {
+    try {
+      call = await getCallById(selectedCallId);
+    } catch (err) {
+      console.error('[Investigation] Failed to fetch call:', err);
+      // Fallback to live store if API fails
+      call = liveStore.findCall(selectedCallId);
+    }
+  }
+  if (!call) return await renderHomePage();
 
-  const risk = call.input_risk_assessment;
-  const rag = call.rag_output;
-  const riskClass = rag.grounded_assessment;
-
-  // Reset to full width for workspace mode
-  // Note: ideally this would be handled by a class on body or #content, but for now we inject styles
+  // /api/v1/call/{call_id} uses risk_assessment (not input_risk_assessment)
+  const risk = call.risk_assessment || call.input_risk_assessment || {};
+  const rag = call.rag_output || {};
+  const nlp = call.nlp_insights || {};
+  const meta = call.call_metadata || {};
+  const riskClass = rag.grounded_assessment || 'low_risk';
+  
+  // Transcript can be a string or array — normalize
+  let transcriptHtml = '';
+  if (call.transcript) {
+    if (typeof call.transcript === 'string') {
+      transcriptHtml = `<div class="transcript-line"><span class="text">${call.transcript}</span></div>`;
+    } else if (Array.isArray(call.transcript) && call.transcript.length) {
+      transcriptHtml = call.transcript.map(t => 
+        `<div class="transcript-line ${t.highlight || ''}"><span class="time">${t.time || ''}</span><span class="speaker">${t.speaker || ''}:</span><span class="text">${t.text || ''}</span></div>`
+      ).join('');
+    }
+  }
 
   return `<div class="workspace-mode">
     <div class="workspace-container">
@@ -511,17 +581,17 @@ function renderInvestigationPage() {
     <div class="identity-bar">
       <div class="identity-main">
         <span class="identity-name">${call.call_id}</span>
-        <span class="identity-phone">${call.phone_masked || ''}</span>
+        <span class="identity-phone">${call.status ? `Status: ${call.status.toUpperCase()}` : ''}</span>
       </div>
       <div class="identity-meta">
         <div class="meta-item" title="Timestamp">
-          <span class="meta-icon">�</span> ${new Date(call.call_timestamp).toLocaleString()}
+          <span class="meta-icon">📅</span> ${call.call_timestamp ? new Date(call.call_timestamp).toLocaleString() : '--'}
         </div>
-        <div class="meta-item" title="Duration">
-          <span class="meta-icon">⏱️</span> ${call.duration || 'N/A'}
+        <div class="meta-item" title="Language">
+          <span class="meta-icon">🗣️</span> ${meta.call_language || call.duration || 'N/A'}
         </div>
         <div class="meta-item" title="Fraud Likelihood">
-           <span class="meta-icon">�</span> ${call.input_risk_assessment.fraud_likelihood.toUpperCase()}
+           <span class="meta-icon">🎯</span> ${(risk.fraud_likelihood || 'unknown').toUpperCase()}
         </div>
       </div>
     </div>
@@ -529,11 +599,11 @@ function renderInvestigationPage() {
     <!-- 3. Risk System Header -->
     <div class="risk-system-header">
       <div class="risk-decision-block ${riskClass}">
-        <h2>${rag.grounded_assessment === 'high_risk' ? 'HIGH RISK — ESCALATE TO COMPLIANCE' : rag.grounded_assessment.replace('_', ' ').toUpperCase()}</h2>
+        <h2>${rag.grounded_assessment === 'high_risk' ? 'HIGH RISK — ESCALATE TO COMPLIANCE' : (rag.grounded_assessment || 'low_risk').replace(/_/g, ' ').toUpperCase()}</h2>
         <div class="risk-scores-inline">
-          <span>Risk Score: ${risk.risk_score}</span>
+          <span>Risk Score: ${risk.risk_score ?? '--'}</span>
           <span>•</span>
-          <span>Confidence: ${Math.round(rag.confidence * 100)}%</span>
+          <span>Confidence: ${rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--')}</span>
         </div>
       </div>
       
@@ -546,17 +616,48 @@ function renderInvestigationPage() {
     <div class="rationale-section">
       <div class="rationale-header">Decision Rationale</div>
       <ul class="rationale-list">
-        <!-- Transforming explanation text to bullets if possible, or using matched patterns + explanation -->
-        ${rag.matched_patterns.map(p => `<li class="rationale-item"><span class="rationale-bullet">•</span> Pattern Detected: ${p}</li>`).join('')}
-        <li class="rationale-item"><span class="rationale-bullet">•</span> ${rag.explanation}</li>
+        ${(rag.matched_patterns || []).map(p => `<li class="rationale-item"><span class="rationale-bullet">•</span> Pattern Detected: ${p}</li>`).join('')}
+        <li class="rationale-item"><span class="rationale-bullet">•</span> ${rag.explanation || call.summary_for_rag || 'No explanation available'}</li>
       </ul>
     </div>
 
-    <!-- 5. Interpretation / Why (Flat Grid) -->
+    <!-- 5. NLP Insights + Risk Indicators Grid -->
     <div class="workspace-container" style="padding-top:32px">
-        <div class="rationale-header">Risk Indicators</div>
+        <div class="rationale-header">Risk Indicators & NLP Insights</div>
         <div class="interpretation-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-        ${rag.matched_patterns.map(p => `
+        ${nlp.intent ? `
+        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
+            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">🎯</div>
+            <div class="interpretation-content">
+            <h4 style="font-size:14px">Intent: ${nlp.intent.label?.replace(/_/g, ' ') || 'Unknown'}</h4>
+            <p style="font-size:12px">Confidence: ${nlp.intent.confidence ? Math.round(nlp.intent.confidence * 100) + '%' : '--'} · Conditionality: ${nlp.intent.conditionality || '--'}</p>
+            </div>
+        </div>` : ''}
+        ${nlp.sentiment ? `
+        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
+            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">💭</div>
+            <div class="interpretation-content">
+            <h4 style="font-size:14px">Sentiment: ${nlp.sentiment.label || 'Unknown'}</h4>
+            <p style="font-size:12px">Confidence: ${nlp.sentiment.confidence ? Math.round(nlp.sentiment.confidence * 100) + '%' : '--'}</p>
+            </div>
+        </div>` : ''}
+        ${nlp.obligation_strength ? `
+        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
+            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">⚖️</div>
+            <div class="interpretation-content">
+            <h4 style="font-size:14px">Obligation Strength: ${nlp.obligation_strength.toUpperCase()}</h4>
+            <p style="font-size:12px">Contradictions: ${nlp.contradictions_detected ? 'YES ⚠️' : 'None'}</p>
+            </div>
+        </div>` : ''}
+        ${meta.call_quality ? `
+        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
+            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">📞</div>
+            <div class="interpretation-content">
+            <h4 style="font-size:14px">Call Quality</h4>
+            <p style="font-size:12px">Noise: ${meta.call_quality.noise_level || '--'} · Stability: ${meta.call_quality.call_stability || '--'} · Naturalness: ${meta.call_quality.speech_naturalness || '--'}</p>
+            </div>
+        </div>` : ''}
+        ${(rag.matched_patterns || []).map(p => `
         <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
             <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">⚠️</div>
             <div class="interpretation-content">
@@ -567,7 +668,7 @@ function renderInvestigationPage() {
         </div>
     </div>
 
-    <!-- 6. Evidence (Flat) -->
+    <!-- 6. Evidence (Transcript) -->
     <div class="evidence-flat">
       <button class="evidence-toggle" onclick="toggleEvidence(this)">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -575,13 +676,14 @@ function renderInvestigationPage() {
       </button>
       <div class="evidence-content hidden">
         <div class="transcript-panel" style="border:none;padding:0;margin-top:16px;background:transparent">
-           ${mockTranscript.map(t => `<div class="transcript-line ${t.highlight || ''}"><span class="time">${t.time}</span><span class="speaker">${t.speaker}:</span><span class="text">${t.text}</span></div>`).join('')}
+           ${transcriptHtml || '<p style="color:var(--text-muted);padding:12px;">No transcript data available for this call.</p>'}
         </div>
       </div>
     </div>
 
   </div>`;
 }
+
 
 function renderActionButtons(action, callId) {
   // Strict Hierarchy: Solid > Outline > Ghost
@@ -614,27 +716,22 @@ function renderPrimaryAction(action, callId) {
 
 function escalateCase(callId) {
   if (confirm(`Escalate ${callId} to Compliance? This will create a ticket and notify #escalations.`)) {
-    // Simulate API call
-    const log = {
-      id: `log_${Date.now()}`,
-      call_id: callId,
-      time: 'Just now',
-      type: 'escalation',
-      action: 'Escalated to Compliance',
-      detail: 'Manual escalation trigger',
-      status: 'Success'
-    };
-    mockWorkflowLogs.unshift(log);
-
-    // Show toast (simulated by alert for now or simple overlay)
-    alert('Case Escalated. Ticket #Comp-992 created.');
-    navigateTo('cases');
+    updateCallStatus(callId, 'escalated')
+      .then(() => {
+        alert('Case Escalated. Ticket created.');
+        navigateTo('cases');
+      })
+      .catch(err => {
+        console.error('[escalateCase] API failed:', err);
+        alert('Case escalation recorded (offline). Ticket will sync when backend is available.');
+        navigateTo('cases');
+      });
   }
 }
 
 function openJSONModal() {
-  const call = mockCalls.find(c => c.call_id === selectedCallId);
-  const jsonStr = JSON.stringify(call, null, 2);
+  const call = liveStore.findCall(selectedCallId);
+  const jsonStr = JSON.stringify(call || { error: 'Call not found in cache' }, null, 2);
   const content = document.getElementById('content');
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -672,7 +769,7 @@ function renderModalContent() {
   if (showJsonView) {
     modalBody.innerHTML = `<div class="json-preview"><pre><code>${JSON.stringify(n8nWorkflowJSON, null, 2)}</code></pre></div>`;
   } else {
-    modalBody.innerHTML = `<div class="workflow-diagram"><div class="workflow-step"><div class="step-icon call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2"/></svg></div><span>Call Received</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon voiceops">VO</div><span>VoiceOps Analysis</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon decision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 515.83 1c0 2-3 3-3 3"/></svg></div><span>Risk Decision</span></div><div class="workflow-connector"></div><div class="workflow-outputs"><div class="workflow-step small"><div class="step-icon slack">${getAutomationIcon('slack')}</div><span>Slack</span></div><div class="workflow-step small"><div class="step-icon crm">${getAutomationIcon('crm')}</div><span>CRM</span></div><div class="workflow-step small"><div class="step-icon callback">${getAutomationIcon('callback')}</div><span>Callback</span></div></div></div><div class="modal-description"><h3>Plug-and-Play Workflow Automation</h3><p>VoiceOps integrates seamlessly with n8n to automate your operational workflows.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✓</span><span>Real-time Slack notifications for high-risk calls</span></div><div class="feature"><span class="feature-icon">✓</span><span>Automatic CRM record updates with risk tags</span></div><div class="feature"><span class="feature-icon">✓</span><span>Smart callback scheduling based on behavior</span></div><div class="feature"><span class="feature-icon">✓</span><span>Customizable escalation paths for compliance</span></div></div></div>`;
+    modalBody.innerHTML = `<div class="workflow-diagram"><div class="workflow-step"><div class="step-icon call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2"/></svg></div><span>Call Received</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon voiceops">VO</div><span>VoiceOps Analysis</span></div><div class="workflow-connector"></div><div class="workflow-step"><div class="step-icon decision"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/></svg></div><span>Risk Decision</span></div><div class="workflow-connector"></div><div class="workflow-outputs"><div class="workflow-step small"><div class="step-icon slack">${getAutomationIcon('slack')}</div><span>Slack</span></div><div class="workflow-step small"><div class="step-icon crm">${getAutomationIcon('crm')}</div><span>CRM</span></div><div class="workflow-step small"><div class="step-icon callback">${getAutomationIcon('callback')}</div><span>Callback</span></div></div></div><div class="modal-description"><h3>Plug-and-Play Workflow Automation</h3><p>VoiceOps integrates seamlessly with n8n to automate your operational workflows.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✓</span><span>Real-time Slack notifications for high-risk calls</span></div><div class="feature"><span class="feature-icon">✓</span><span>Automatic CRM record updates with risk tags</span></div><div class="feature"><span class="feature-icon">✓</span><span>Smart callback scheduling based on behavior</span></div><div class="feature"><span class="feature-icon">✓</span><span>Customizable escalation paths for compliance</span></div></div></div>`;
   }
 }
 

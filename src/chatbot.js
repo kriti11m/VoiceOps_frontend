@@ -270,7 +270,7 @@ export class VoiceOpsAssistant {
       // Include sources if the API returns them
       ...(data.sources && {
         sections: [{
-          title: '📚 Sources',
+          title: 'Sources',
           items: Array.isArray(data.sources)
             ? data.sources.map(s => typeof s === 'string' ? s : (s.title || s.name || JSON.stringify(s)))
             : [String(data.sources)]
@@ -297,7 +297,7 @@ export class VoiceOpsAssistant {
         content: 'I can help you understand risk assessments in VoiceOps.',
         sections: [
           {
-            title: '🎯 Risk Score Components',
+            title: 'Risk Score Components',
             items: [
               'Behavioral pattern analysis (40%)',
               'Historical interaction data (25%)',
@@ -306,7 +306,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: '📊 Score Interpretation',
+            title: 'Score Interpretation',
             items: [
               'High Risk (70+): Immediate escalation required',
               'Medium Risk (40-69): Manual review recommended',
@@ -324,7 +324,7 @@ export class VoiceOpsAssistant {
         content: 'Here are the key fraud patterns VoiceOps detects:',
         sections: [
           {
-            title: '🚨 High-Risk Patterns',
+            title: 'High-Risk Patterns',
             items: [
               'Conditional promises with contradictions',
               'Identity concealment attempts',
@@ -333,7 +333,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: '⚠️ Medium-Risk Patterns',
+            title: 'Medium-Risk Patterns',
             items: [
               'Financial hardship claims',
               'Partial payment offers',
@@ -352,7 +352,7 @@ export class VoiceOpsAssistant {
         content: 'VoiceOps helps maintain compliance across multiple frameworks:',
         sections: [
           {
-            title: '📋 Regulatory Coverage',
+            title: 'Regulatory Coverage',
             items: [
               'UDAAP (Unfair, Deceptive practices)',
               'TCPA (Telephone Consumer Protection)',
@@ -361,7 +361,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: '🛡️ Automated Safeguards',
+            title: 'Automated Safeguards',
             items: [
               'Real-time flag detection',
               'Automatic escalation triggers',
@@ -380,7 +380,7 @@ export class VoiceOpsAssistant {
         content: 'VoiceOps integrates with your existing workflow through n8n:',
         sections: [
           {
-            title: '🔗 Available Integrations',
+            title: 'Available Integrations',
             items: [
               'Slack notifications for high-risk cases',
               'CRM record updates with risk tags',
@@ -389,7 +389,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: '⚡ Trigger Conditions',
+            title: 'Trigger Conditions',
             items: [
               'Risk score thresholds',
               'Pattern detection events',
@@ -408,7 +408,7 @@ export class VoiceOpsAssistant {
       content: 'I\'m here to help you with VoiceOps risk analysis and compliance management.',
       sections: [
         {
-          title: '💡 I can assist with',
+          title: 'I can assist with',
           items: [
             'Risk assessment interpretation',
             'Fraud pattern explanation',
@@ -424,7 +424,7 @@ export class VoiceOpsAssistant {
 
   // Get investigation-specific response
   getInvestigationResponse(message, callId) {
-    const call = window.mockCalls?.find(c => c.call_id === callId);
+    const call = window.liveCalls?.find(c => c.call_id === callId);
     if (!call) {
       return {
         type: 'error',
@@ -435,41 +435,44 @@ export class VoiceOpsAssistant {
     const lowerMessage = message.toLowerCase();
     
     if (lowerMessage.includes('explain') || lowerMessage.includes('assessment')) {
+      const rag = call.rag_output || {};
+      const risk = call.risk_assessment || call.input_risk_assessment || {};
       return {
         type: 'case-analysis',
         content: `Analysis for Case ${callId}:`,
         sections: [
           {
-            title: '🎯 Risk Decision',
+            title: 'Risk Decision',
             items: [
-              `Assessment: ${call.rag_output.grounded_assessment.replace('_', ' ').toUpperCase()}`,
-              `Confidence: ${Math.round(call.rag_output.confidence * 100)}%`,
-              `Risk Score: ${call.input_risk_assessment.risk_score}/100`
+              `Assessment: ${(rag.grounded_assessment || call.grounded_assessment || 'unknown').replace(/_/g, ' ').toUpperCase()}`,
+              `Confidence: ${rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--')}`,
+              `Risk Score: ${risk.risk_score ?? call.risk_score ?? '--'}/100`
             ]
           },
           {
-            title: '🔍 Detected Patterns',
-            items: call.rag_output.matched_patterns.map(pattern => `• ${pattern}`)
+            title: 'Detected Patterns',
+            items: (rag.matched_patterns || []).length ? rag.matched_patterns.map(pattern => `• ${pattern}`) : ['• No specific patterns recorded']
           }
         ],
-        recommendation: call.rag_output.explanation
+        recommendation: rag.explanation || call.summary_for_rag || 'No detailed explanation available.'
       };
     }
 
     if (lowerMessage.includes('action') || lowerMessage.includes('recommend')) {
-      const action = call.rag_output.recommended_action;
+      const rag = call.rag_output || {};
+      const action = rag.recommended_action || call.recommended_action || '';
       return {
         type: 'action-guidance',
         content: `Recommended action for this case:`,
         sections: [
           {
-            title: '📋 Next Steps',
+            title: 'Next Steps',
             items: this.getActionSteps(action)
           },
           {
-            title: '⚖️ Compliance Considerations',
-            items: call.rag_output.regulatory_flags.length > 0 
-              ? call.rag_output.regulatory_flags.map(flag => `• ${flag}`)
+            title: 'Compliance Considerations',
+            items: (rag.regulatory_flags || []).length > 0 
+              ? rag.regulatory_flags.map(flag => `• ${flag}`)
               : ['• No specific compliance flags detected']
           }
         ],
@@ -478,17 +481,18 @@ export class VoiceOpsAssistant {
     }
 
     // Default case response
+    const rag = call.rag_output || {};
     return {
       type: 'case-overview',
       content: `Case ${callId} Overview:`,
       sections: [
         {
-          title: '📊 Quick Facts',
+          title: 'Quick Facts',
           items: [
             `Call ID: ${call.call_id}`,
-            `Risk Level: ${call.rag_output.grounded_assessment.replace('_', ' ')}`,
-            `Duration: ${call.duration || 'N/A'}`,
-            `Timestamp: ${new Date(call.call_timestamp).toLocaleString()}`
+            `Risk Level: ${(rag.grounded_assessment || call.grounded_assessment || 'unknown').replace(/_/g, ' ')}`,
+            `Status: ${call.status || 'N/A'}`,
+            `Timestamp: ${call.call_timestamp ? new Date(call.call_timestamp).toLocaleString() : 'N/A'}`
           ]
         }
       ],
