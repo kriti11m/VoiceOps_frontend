@@ -78,7 +78,7 @@ function renderHeader() {
         </div>
         <div class="n8n-actions">
           <button class="btn-n8n" id="btn-open-n8n">Open in n8n</button>
-          <button class="btn-n8n-secondary" id="btn-view-json">View JSON</button>
+          <button class="btn-n8n-secondary" id="btn-simulate-call">Simulate Customer Call</button>
         </div>
       </div>
     </div>
@@ -100,12 +100,15 @@ function setupEventListeners() {
     }
   });
 
-  // n8n buttons
+  // n8n buttons + simulate
   document.getElementById('header').addEventListener('click', (e) => {
-    if (e.target.id === 'btn-open-n8n' || e.target.id === 'btn-view-json') {
-      showJsonView = e.target.id === 'btn-view-json';
+    if (e.target.id === 'btn-open-n8n') {
+      showJsonView = false;
       renderModalContent();
       document.getElementById('n8n-modal').classList.add('active');
+    }
+    if (e.target.id === 'btn-simulate-call') {
+      simulateCall();
     }
   });
 
@@ -169,7 +172,72 @@ window.openCallInvestigation = function (callId) {
 };
 
 window.simulateCall = function () {
-  startProcessing('simulated_call_demo.wav');
+  // Show a popup overlay with just the animation — no data loading
+  const overlay = document.createElement('div');
+  overlay.id = 'simulate-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;';
+
+  const procSteps = [
+    { label: 'Call Received', icon: '' },
+    { label: 'Transcribing Audio', icon: '' },
+    { label: 'NLP Analysis', icon: '' },
+    { label: 'RAG Knowledge Check', icon: '' },
+    { label: 'Risk Decision', icon: '' },
+    { label: 'Action Dispatched', icon: '' }
+  ];
+
+  function renderSimBox(step) {
+    return `
+      <div style="background:var(--bg-elevated, #1a1d23);border:1px solid var(--border-color, #2a2d35);border-radius:16px;padding:40px 48px;min-width:500px;max-width:600px;box-shadow:0 24px 48px rgba(0,0,0,0.4);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+          <h2 style="color:#fff;font-size:20px;margin:0;">🔄 VoiceOps Pipeline Demo</h2>
+          <button id="close-sim" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;padding:4px 8px;">&times;</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          ${procSteps.map((s, i) => {
+            let color = '#555'; let opacity = '0.4'; let indicator = '○';
+            if (i < step) { color = '#22c55e'; opacity = '1'; indicator = '✓'; }
+            else if (i === step) { color = '#6366f1'; opacity = '1'; indicator = '●'; }
+            return `<div style="display:flex;align-items:center;gap:14px;opacity:${opacity};transition:opacity 0.3s;">
+              <span style="font-size:22px;">${s.icon}</span>
+              <span style="flex:1;color:#fff;font-size:15px;">${s.label}</span>
+              <span style="color:${color};font-size:16px;font-weight:600;">${indicator}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${step >= procSteps.length ? `<div style="margin-top:24px;padding:16px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;text-align:center;">
+          <p style="color:#22c55e;font-size:15px;margin:0;font-weight:600;">Pipeline Complete — Case would be created & routed</p>
+        </div>` : ''}
+      </div>`;
+  }
+
+  overlay.innerHTML = renderSimBox(0);
+  document.body.appendChild(overlay);
+
+  // Close button
+  overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'close-sim' || e.target === overlay) {
+      overlay.remove();
+    }
+  });
+
+  // Animate steps
+  let step = 0;
+  const durations = [800, 1200, 1400, 1200, 1000, 800];
+  function nextStep() {
+    step++;
+    overlay.innerHTML = renderSimBox(step);
+    overlay.addEventListener('click', (e) => {
+      if (e.target.id === 'close-sim' || e.target === overlay) overlay.remove();
+    });
+    if (step < procSteps.length) {
+      setTimeout(nextStep, durations[step]);
+    } else {
+      // Auto-close after 2 seconds
+      setTimeout(() => { if (document.getElementById('simulate-overlay')) overlay.remove(); }, 2500);
+    }
+  }
+  setTimeout(nextStep, durations[0]);
 };
 
 function startProcessing(fileName) {
@@ -203,7 +271,7 @@ function setupUploadHandlers() {
     return;
   }
 
-  console.log('[Upload] Handlers attached ✅');
+  console.log('[Upload] Handlers attached ');
 
   // Click on upload zone → trigger file picker
   // No preventDefault — it can block the file dialog in some browsers
@@ -264,7 +332,7 @@ async function handleFileUpload(file) {
       renderPage();
     }
   } catch (err) {
-    console.error('[Upload] ❌ FAILED:', err);
+    console.error('[Upload]  FAILED:', err);
     alert('Upload failed: ' + err.message);
     // Re-render the page to restore the upload zone
     renderPage();
@@ -397,21 +465,13 @@ function renderStartAnalysisPanel() {
   return `<div class="start-analysis-panel">
     <div class="start-analysis-header">
       <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Start New Analysis</h2>
-      <span class="webhook-hint">Calls can also be triggered via <code>n8n webhook</code></span>
     </div>
-    <div class="analysis-modes">
+    <div class="analysis-modes" style="width:100%;display:flex;justify-content:center;">
       <input type="file" id="file-input" accept=".mp3,.wav,.m4a,.ogg,.webm" style="display:none">
-      <div class="upload-zone" id="upload-zone">
+      <div class="upload-zone" id="upload-zone" style="width:100%;max-width:100%;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <h3>Drop call recording here or browse file</h3>
         <p>Supported formats: MP3, WAV, M4A</p>
-      </div>
-      <div class="simulate-section">
-        <button class="btn-simulate" onclick="simulateCall()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>
-          Simulate Customer Call
-        </button>
-        <span class="simulate-desc">Triggers a demo call processing pipeline</span>
       </div>
     </div>
   </div>`;
@@ -599,142 +659,138 @@ async function renderInvestigationPage() {
       call = await getCallById(selectedCallId);
     } catch (err) {
       console.error('[Investigation] Failed to fetch call:', err);
-      // Fallback to live store if API fails
       call = liveStore.findCall(selectedCallId);
     }
   }
   if (!call) return await renderHomePage();
 
-  // /api/v1/call/{call_id} uses risk_assessment (not input_risk_assessment)
   const risk = call.risk_assessment || call.input_risk_assessment || {};
   const rag = call.rag_output || {};
   const nlp = call.nlp_insights || {};
   const meta = call.call_metadata || {};
   const riskClass = rag.grounded_assessment || 'low_risk';
-  
-  // Transcript can be a string or array — normalize
-  let transcriptHtml = '';
-  if (call.transcript) {
-    if (typeof call.transcript === 'string') {
-      transcriptHtml = `<div class="transcript-line"><span class="text">${call.transcript}</span></div>`;
-    } else if (Array.isArray(call.transcript) && call.transcript.length) {
-      transcriptHtml = call.transcript.map(t => 
-        `<div class="transcript-line ${t.highlight || ''}"><span class="time">${t.time || ''}</span><span class="speaker">${t.speaker || ''}:</span><span class="text">${t.text || ''}</span></div>`
-      ).join('');
+  const riskLabel = riskClass === 'high_risk' ? 'HIGH RISK' : riskClass === 'medium_risk' ? 'MEDIUM RISK' : 'LOW RISK';
+  const confidencePct = rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--');
+
+  // Conversation — backend sends call.conversation as [{speaker: "AGENT"|"CUSTOMER", text: "..."}]
+  // Fallback to call.transcript for older records
+  const convSource = call.conversation || call.transcript;
+  let conversationHtml = '';
+  if (convSource) {
+    if (typeof convSource === 'string') {
+      conversationHtml = `<div class="inv-conv-bubble inv-conv-agent"><div class="inv-conv-label">Transcript</div><div class="inv-conv-text">${convSource}</div></div>`;
+    } else if (Array.isArray(convSource) && convSource.length) {
+      conversationHtml = convSource.map(t => {
+        const speaker = (t.speaker || '').toUpperCase();
+        const isAgent = speaker === 'AGENT' || speaker.includes('AGENT') || speaker.includes('REP');
+        const bubbleClass = isAgent ? 'inv-conv-agent' : 'inv-conv-customer';
+        const label = isAgent ? 'Agent' : 'Customer';
+        return `<div class="inv-conv-bubble ${bubbleClass}">
+          <div class="inv-conv-label">${label}${t.time ? ` <span class="inv-conv-time">${t.time}</span>` : ''}</div>
+          <div class="inv-conv-text">${t.text || ''}</div>
+        </div>`;
+      }).join('');
     }
   }
 
-  return `<div class="workspace-mode">
-    <div class="workspace-container">
-        <!-- 1. Breadcrumb Nav -->
-        <div class="breadcrumb-nav">
-          <a href="#" onclick="navigateTo('cases'); return false;" class="breadcrumb-item">Active Cases</a>
-          <span class="breadcrumb-separator">/</span>
-          <span class="breadcrumb-active">Case #${call.call_id}</span>
-        </div>
-    </div>
+  // NLP insight cards
+  const insightCards = [];
+  if (nlp.intent) insightCards.push({ icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`, title: `Intent: ${(nlp.intent.label || 'unknown').replace(/_/g, ' ')}`, detail: `Confidence: ${nlp.intent.confidence ? Math.round(nlp.intent.confidence * 100) + '%' : '--'} · Conditionality: ${nlp.intent.conditionality || '--'}` });
+  if (nlp.sentiment) insightCards.push({ icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, title: `Sentiment: ${nlp.sentiment.label || 'unknown'}`, detail: `Confidence: ${nlp.sentiment.confidence ? Math.round(nlp.sentiment.confidence * 100) + '%' : '--'}` });
+  if (nlp.obligation_strength) insightCards.push({ icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M5 6l7-3 7 3"/><path d="M5 18l7 3 7-3"/><rect x="3" y="8" width="4" height="8" rx="1"/><rect x="17" y="8" width="4" height="8" rx="1"/></svg>`, title: `Obligation Strength: ${nlp.obligation_strength.toUpperCase()}`, detail: `Contradictions: ${nlp.contradictions_detected ? 'Yes' : 'None'}` });
+  if (meta.call_quality) insightCards.push({ icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`, title: 'Call Quality', detail: `Noise: ${meta.call_quality.noise_level || '--'} · Stability: ${meta.call_quality.call_stability || '--'} · Naturalness: ${meta.call_quality.speech_naturalness || '--'}` });
 
-    <!-- 2. Identity Bar (Sticky) -->
-    <div class="identity-bar">
-      <div class="identity-main">
-        <span class="identity-name">${call.call_id}</span>
-        <span class="identity-phone">${call.status ? `Status: ${call.status.toUpperCase()}` : ''}</span>
-      </div>
-      <div class="identity-meta">
-        <div class="meta-item" title="Timestamp">
-          <span class="meta-icon">📅</span> ${call.call_timestamp ? new Date(call.call_timestamp).toLocaleString() : '--'}
-        </div>
-        <div class="meta-item" title="Language">
-          <span class="meta-icon">🗣️</span> ${meta.call_language || call.duration || 'N/A'}
-        </div>
-        <div class="meta-item" title="Fraud Likelihood">
-           <span class="meta-icon">🎯</span> ${(risk.fraud_likelihood || 'unknown').toUpperCase()}
-        </div>
-      </div>
-    </div>
+  return `<div class="inv-page">
 
-    <!-- 3. Risk System Header -->
-    <div class="risk-system-header">
-      <div class="risk-decision-block ${riskClass}">
-        <h2>${rag.grounded_assessment === 'high_risk' ? 'HIGH RISK — ESCALATE TO COMPLIANCE' : (rag.grounded_assessment || 'low_risk').replace(/_/g, ' ').toUpperCase()}</h2>
-        <div class="risk-scores-inline">
-          <span>Risk Score: ${risk.risk_score ?? '--'}</span>
-          <span>•</span>
-          <span>Confidence: ${rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--')}</span>
+    <!-- Breadcrumb -->
+    <nav class="inv-breadcrumb">
+      <a href="#" onclick="navigateTo('cases'); return false;">Active Cases</a>
+      <span class="inv-bc-sep">/</span>
+      <span class="inv-bc-current">Case #${call.call_id}</span>
+    </nav>
+
+    <!-- ═══ Top Card: Identity + Verdict + Actions ═══ -->
+    <div class="inv-hero-card">
+      <div class="inv-hero-top">
+        <div class="inv-hero-id">
+          <h2 class="inv-call-id">${call.call_id}</h2>
+          <span class="inv-status-badge">${call.status ? `Status: ${call.status.toUpperCase()}` : ''}</span>
+        </div>
+        <div class="inv-hero-meta">
+          <span>${call.call_timestamp ? new Date(call.call_timestamp).toLocaleString() : '--'}</span>
+          <span>${meta.call_language || call.duration || 'N/A'}</span>
+          <span>${(risk.fraud_likelihood || 'unknown').toUpperCase()}</span>
         </div>
       </div>
-      
-      <div class="action-bar">
-         ${renderActionButtons(rag.recommended_action, call.call_id)}
+
+      <div class="inv-hero-verdict">
+        <div class="inv-verdict-left">
+          <span class="inv-verdict-label ${riskClass}">${riskLabel}</span>
+          <span class="inv-verdict-scores">Risk Score: ${risk.risk_score ?? '--'}  •  Confidence: ${confidencePct}</span>
+        </div>
+        <div class="inv-verdict-actions">
+          ${renderActionButtons(rag.recommended_action, call.call_id)}
+        </div>
       </div>
     </div>
 
-    <!-- 4. Rationale Section (Flat) -->
-    <div class="rationale-section">
-      <div class="rationale-header">Decision Rationale</div>
-      <ul class="rationale-list">
-        ${(rag.matched_patterns || []).map(p => `<li class="rationale-item"><span class="rationale-bullet">•</span> Pattern Detected: ${p}</li>`).join('')}
-        <li class="rationale-item"><span class="rationale-bullet">•</span> ${rag.explanation || call.summary_for_rag || 'No explanation available'}</li>
-      </ul>
-    </div>
+    <!-- ═══ Two-Column Body ═══ -->
+    <div class="inv-body-grid">
 
-    <!-- 5. NLP Insights + Risk Indicators Grid -->
-    <div class="workspace-container" style="padding-top:32px">
-        <div class="rationale-header">Risk Indicators & NLP Insights</div>
-        <div class="interpretation-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
-        ${nlp.intent ? `
-        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
-            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">🎯</div>
-            <div class="interpretation-content">
-            <h4 style="font-size:14px">Intent: ${nlp.intent.label?.replace(/_/g, ' ') || 'Unknown'}</h4>
-            <p style="font-size:12px">Confidence: ${nlp.intent.confidence ? Math.round(nlp.intent.confidence * 100) + '%' : '--'} · Conditionality: ${nlp.intent.conditionality || '--'}</p>
-            </div>
-        </div>` : ''}
-        ${nlp.sentiment ? `
-        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
-            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">💭</div>
-            <div class="interpretation-content">
-            <h4 style="font-size:14px">Sentiment: ${nlp.sentiment.label || 'Unknown'}</h4>
-            <p style="font-size:12px">Confidence: ${nlp.sentiment.confidence ? Math.round(nlp.sentiment.confidence * 100) + '%' : '--'}</p>
-            </div>
-        </div>` : ''}
-        ${nlp.obligation_strength ? `
-        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
-            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">⚖️</div>
-            <div class="interpretation-content">
-            <h4 style="font-size:14px">Obligation Strength: ${nlp.obligation_strength.toUpperCase()}</h4>
-            <p style="font-size:12px">Contradictions: ${nlp.contradictions_detected ? 'YES ⚠️' : 'None'}</p>
-            </div>
-        </div>` : ''}
-        ${meta.call_quality ? `
-        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
-            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">📞</div>
-            <div class="interpretation-content">
-            <h4 style="font-size:14px">Call Quality</h4>
-            <p style="font-size:12px">Noise: ${meta.call_quality.noise_level || '--'} · Stability: ${meta.call_quality.call_stability || '--'} · Naturalness: ${meta.call_quality.speech_naturalness || '--'}</p>
-            </div>
-        </div>` : ''}
-        ${(rag.matched_patterns || []).map(p => `
-        <div class="interpretation-block" style="border:1px solid var(--border-color); box-shadow:none; padding:16px">
-            <div class="interpretation-icon" style="width:32px;height:32px;font-size:16px">⚠️</div>
-            <div class="interpretation-content">
-            <h4 style="font-size:14px">${p}</h4>
-            <p style="font-size:12px">detected in transcript</p>
-            </div>
-        </div>`).join('')}
-        </div>
-    </div>
+      <!-- LEFT COLUMN -->
+      <div class="inv-col-left">
 
-    <!-- 6. Evidence (Transcript) -->
-    <div class="evidence-flat">
-      <button class="evidence-toggle" onclick="toggleEvidence(this)">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        Evidence (Transcript)
-      </button>
-      <div class="evidence-content hidden">
-        <div class="transcript-panel" style="border:none;padding:0;margin-top:16px;background:transparent">
-           ${transcriptHtml || '<p style="color:var(--text-muted);padding:12px;">No transcript data available for this call.</p>'}
+        <!-- Decision Rationale -->
+        <div class="inv-section-card">
+          <h3 class="inv-section-title">Decision Rationale</h3>
+          <div class="inv-rationale-content">
+            ${(rag.matched_patterns || []).map(p => `<div class="inv-rationale-item"><span class="inv-bullet">●</span><span>${p}</span></div>`).join('')}
+            <div class="inv-rationale-item"><span class="inv-bullet">●</span><span>${rag.explanation || call.summary_for_rag || 'No explanation available'}</span></div>
+          </div>
         </div>
+
+        <!-- Agent-Customer Conversation — Collapsible -->
+        <div class="inv-section-card">
+          <button class="inv-section-toggle" onclick="toggleEvidence(this)">
+            <svg class="inv-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <h3 class="inv-section-title" style="margin:0">Conversation</h3>
+          </button>
+          <div class="inv-collapsible hidden">
+            <div class="inv-conversation-box">
+              ${conversationHtml || '<p class="inv-empty-msg">No conversation data available for this call.</p>'}
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="inv-col-right">
+
+        <!-- NLP Insights -->
+        <div class="inv-section-card">
+          <h3 class="inv-section-title">Risk Indicators & NLP Insights</h3>
+          <div class="inv-insights-grid">
+            ${insightCards.map(c => `
+            <div class="inv-insight-card">
+              <span class="inv-insight-icon">${c.icon}</span>
+              <div class="inv-insight-text">
+                <h4>${c.title}</h4>
+                <p>${c.detail}</p>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Matched Patterns (if any) -->
+        ${(rag.matched_patterns || []).length ? `
+        <div class="inv-section-card">
+          <h3 class="inv-section-title">Matched Patterns</h3>
+          <div class="inv-pattern-chips">
+            ${rag.matched_patterns.map(p => `<span class="inv-pattern-chip">${p}</span>`).join('')}
+          </div>
+        </div>` : ''}
+
       </div>
     </div>
 
@@ -743,10 +799,7 @@ async function renderInvestigationPage() {
 
 
 function renderActionButtons(action, callId) {
-  // Strict Hierarchy: Solid > Outline > Ghost
   return `
-    <button class="btn-primary-solid" onclick="escalateCase('${callId}')">Escalate to Compliance</button>
-    <button class="btn-secondary-outline" onclick="logAction('${callId}', 'callback')">Schedule Callback</button>
     <button class="btn-tertiary-ghost" onclick="markForMonitoring('${callId}')">Mark as Safe</button>
   `;
 }
@@ -755,7 +808,8 @@ window.toggleEvidence = function (btn) {
   const content = btn.nextElementSibling;
   content.classList.toggle('hidden');
   btn.classList.toggle('collapsed');
-  // Rotate icon handling via CSS
+  const chevron = btn.querySelector('.inv-chevron');
+  if (chevron) chevron.style.transform = content.classList.contains('hidden') ? 'rotate(-90deg)' : 'rotate(0deg)';
 }
 
 function renderPrimaryAction(action, callId) {
