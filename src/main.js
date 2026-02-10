@@ -9,13 +9,13 @@ import './dashboard.css';
 import { n8nWorkflowJSON } from './data.js';
 import VoiceOpsAssistant from './chatbot.js';
 import { renderDashboard } from './dashboard.js';
-import { getCalls, getCallById, getActiveCases, getRecentActivity, updateCallStatus, liveStore } from './api.js';
+import { getCalls, getCallById, getActiveCases, getRecentActivity, updateCallStatus, analyzeCall, liveStore } from './api.js';
 
 // State
 let currentPage = 'dashboard';
 let selectedCallId = null;
 let showJsonView = false;
-let processingState = null; // null | { step: 0-4, fileName: string }
+let processingState = null; // null | { step: 0-4, fileName: string, uploading: boolean }
 
 // Initialize AI Assistant
 const assistant = new VoiceOpsAssistant();
@@ -129,8 +129,11 @@ function setupEventListeners() {
     }, 2000);
   });
 
-  // Content clicks
+  // Content clicks — but NOT on upload zone
   document.getElementById('content').addEventListener('click', (e) => {
+    // Don't intercept clicks inside upload zone or file input
+    if (e.target.closest('#upload-zone') || e.target.closest('#file-input')) return;
+    
     const callCard = e.target.closest('.call-card');
     if (callCard) {
       selectedCallId = callCard.dataset.callId;
@@ -170,7 +173,8 @@ window.simulateCall = function () {
 };
 
 function startProcessing(fileName) {
-  processingState = { step: 0, fileName };
+  // Simulation mode only (no real file)
+  processingState = { step: 0, fileName, uploading: false };
   renderPage();
 
   const stepDurations = [1200, 1500, 1000, 800];
@@ -179,16 +183,14 @@ function startProcessing(fileName) {
   function advanceStep() {
     currentStep++;
     if (currentStep < 4) {
-      processingState = { step: currentStep, fileName };
-      renderPage();
+      processingState = { ...processingState, step: currentStep };
+      updateProcessingUI();
       setTimeout(advanceStep, stepDurations[currentStep]);
     } else {
-      // Complete - simulation finished, refresh from API
       processingState = null;
       renderPage();
     }
   }
-
   setTimeout(advanceStep, stepDurations[0]);
 }
 
@@ -196,10 +198,21 @@ function setupUploadHandlers() {
   const uploadZone = document.getElementById('upload-zone');
   const fileInput = document.getElementById('file-input');
 
-  if (!uploadZone || !fileInput) return;
+  if (!uploadZone || !fileInput) {
+    console.warn('[Upload] upload-zone or file-input not found in DOM');
+    return;
+  }
 
-  uploadZone.addEventListener('click', () => fileInput.click());
+  console.log('[Upload] Handlers attached ✅');
 
+  // Click on upload zone → trigger file picker
+  // No preventDefault — it can block the file dialog in some browsers
+  uploadZone.addEventListener('click', () => {
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  // Drag & drop
   uploadZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     uploadZone.classList.add('dragover');
@@ -213,13 +226,57 @@ function setupUploadHandlers() {
     e.preventDefault();
     uploadZone.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file) startProcessing(file.name);
+    if (file) handleFileUpload(file);
   });
 
-  fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) startProcessing(file.name);
+  // File picker callback
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (file) handleFileUpload(file);
   });
+}
+
+// Upload handler — just hit the API, nothing else
+async function handleFileUpload(file) {
+  console.log('[Upload] GOT FILE:', file.name, '|', file.type, '|', file.size, 'bytes');
+
+  // Disable further uploads and show status
+  const uploadZone = document.getElementById('upload-zone');
+  if (uploadZone) {
+    uploadZone.style.pointerEvents = 'none';
+    uploadZone.style.opacity = '0.6';
+    uploadZone.innerHTML = `<p style="color:var(--text-primary);font-size:16px;padding:20px;">⏳ Uploading & analyzing <strong>${file.name}</strong>...<br><small>This may take a minute.</small></p>`;
+  }
+
+  try {
+    console.log('[Upload] >>> Sending POST to /analyze-call...');
+    const result = await analyzeCall(file);
+    console.log('[Upload] <<< Response:', result);
+
+    if (result && result.call_id) {
+      alert('✅ Analysis complete! Opening case: ' + result.call_id);
+      selectedCallId = result.call_id;
+      currentPage = 'investigation';
+      renderSidebar();
+      renderPage();
+    } else {
+      alert('✅ Call analyzed successfully!');
+      renderPage();
+    }
+  } catch (err) {
+    console.error('[Upload] ❌ FAILED:', err);
+    alert('Upload failed: ' + err.message);
+    // Re-render the page to restore the upload zone
+    renderPage();
+  }
+}
+
+// Update just the processing panel without re-rendering the whole page
+function updateProcessingUI() {
+  const panel = document.querySelector('.start-analysis-panel');
+  if (panel) {
+    panel.outerHTML = renderStartAnalysisPanel();
+  }
 }
 
 // Page rendering
@@ -343,11 +400,11 @@ function renderStartAnalysisPanel() {
       <span class="webhook-hint">Calls can also be triggered via <code>n8n webhook</code></span>
     </div>
     <div class="analysis-modes">
+      <input type="file" id="file-input" accept=".mp3,.wav,.m4a,.ogg,.webm" style="display:none">
       <div class="upload-zone" id="upload-zone">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <h3>Drop call recording here or browse file</h3>
         <p>Supported formats: MP3, WAV, M4A</p>
-        <input type="file" id="file-input" accept=".mp3,.wav,.m4a" style="display:none">
       </div>
       <div class="simulate-section">
         <button class="btn-simulate" onclick="simulateCall()">

@@ -80,12 +80,32 @@ export async function sendChatMessage(question) {
 }
 
 // ─── Analyze Call API ───────────────────────────────────────
+// Separate ngrok URL; sends audio file as multipart/form-data
 
-export async function analyzeCall(payload) {
-  return apiFetch('/api/v1/analyze-call', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
+const ANALYZE_CALL_URL = 'https://be35-2409-40f4-3-ffec-dd21-5c50-cb7e-c5f5.ngrok-free.app/analyze-call';
+
+export async function analyzeCall(audioFile) {
+  const formData = new FormData();
+  formData.append('audio_file', audioFile);
+
+  try {
+    const res = await fetch(ANALYZE_CALL_URL, {
+      method: 'POST',
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+        // Do NOT set Content-Type — browser sets it with the correct multipart boundary
+      },
+      body: formData
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${errBody}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.error('[API] POST /analyze-call failed:', err.message);
+    throw err;
+  }
 }
 
 // ─── Knowledge Base APIs ────────────────────────────────────
