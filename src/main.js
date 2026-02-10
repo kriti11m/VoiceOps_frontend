@@ -668,6 +668,8 @@ async function renderInvestigationPage() {
   const rag = call.rag_output || {};
   const nlp = call.nlp_insights || {};
   const meta = call.call_metadata || {};
+  const callContext = call.call_context || {};
+  const callLanguage = callContext.call_language || call.call_language || meta.call_language || 'N/A';
   const riskClass = rag.grounded_assessment || 'low_risk';
   const riskLabel = riskClass === 'high_risk' ? 'HIGH RISK' : riskClass === 'medium_risk' ? 'MEDIUM RISK' : 'LOW RISK';
   const confidencePct = rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--');
@@ -718,7 +720,6 @@ async function renderInvestigationPage() {
         </div>
         <div class="inv-hero-meta">
           <span>${call.call_timestamp ? new Date(call.call_timestamp).toLocaleString() : '--'}</span>
-          <span>${meta.call_language || call.duration || 'N/A'}</span>
           <span>${(risk.fraud_likelihood || 'unknown').toUpperCase()}</span>
         </div>
       </div>
@@ -726,6 +727,7 @@ async function renderInvestigationPage() {
       <div class="inv-hero-verdict">
         <div class="inv-verdict-left">
           <span class="inv-verdict-label ${riskClass}">${riskLabel}</span>
+          <span class="inv-lang-badge">Language Detected : ${callLanguage.charAt(0).toUpperCase() + callLanguage.slice(1)}</span>
           <span class="inv-verdict-scores">Risk Score: ${risk.risk_score ?? '--'}  •  Confidence: ${confidencePct}</span>
         </div>
         <div class="inv-verdict-actions">

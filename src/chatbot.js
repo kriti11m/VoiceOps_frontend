@@ -54,7 +54,6 @@ export class VoiceOpsAssistant {
             <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
           </svg>
           <p>How can I help you today?</p>
-          <div class="suggestion-chips" id="suggestion-chips"></div>
         </div>
         
         <div class="chat-messages" id="chat-messages"></div>
@@ -101,72 +100,22 @@ export class VoiceOpsAssistant {
 
       // Send button click
       sendBtn.addEventListener('click', () => this.sendMessage());
-
-      // Suggestion chips
-      document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('chip-btn')) {
-          this.sendPredefinedMessage(e.target.textContent);
-        }
-      });
     }
   }
 
-  // Set welcome message and suggestions
+  // Set welcome message
   setWelcomeMessage() {
-    this.updateSuggestions(this.getContextualSuggestions());
+    // No suggestion chips — just show the empty state
   }
 
-  // Get contextual suggestions based on current page/context
+  // Get contextual suggestions (disabled — chips removed)
   getContextualSuggestions() {
-    if (!this.currentContext) {
-      return [
-        "Show me today's high-risk cases",
-        "Explain fraud detection patterns",
-        "What are common compliance flags?",
-        "How does the RAG system work?"
-      ];
-    }
-
-    switch (this.currentContext.page) {
-      case 'investigation':
-        return [
-          "Explain this risk assessment",
-          "What patterns were detected?",
-          "Recommend next actions",
-          "Show similar cases"
-        ];
-      case 'home':
-        return [
-          "Summarize today's risk alerts",
-          "Show processing statistics",
-          "Explain risk score distribution",
-          "Review automation status"
-        ];
-      case 'risk-queue':
-        return [
-          "Prioritize high-risk cases",
-          "Bulk action recommendations",
-          "Compliance review checklist",
-          "Export queue summary"
-        ];
-      default:
-        return [
-          "Help with risk analysis",
-          "Compliance guidelines",
-          "Pattern recognition tips",
-          "Workflow automation"
-        ];
-    }
+    return [];
   }
 
-  // Update suggestion chips
-  updateSuggestions(suggestions) {
-    const chipsContainer = document.getElementById('suggestion-chips');
-    if (!chipsContainer) return;
-
-    chipsContainer.innerHTML = suggestions.map(suggestion => 
-      `<button class="chip-btn">${suggestion}</button>`
-    ).join('');
+  // Update suggestion chips (disabled — chips removed)
+  updateSuggestions() {
+    // No-op: suggestion chips have been removed from the UI
   }
 
   // Send a message
@@ -270,7 +219,7 @@ export class VoiceOpsAssistant {
       // Include sources if the API returns them
       ...(data.sources && {
         sections: [{
-          title: 'Sources',
+          title: '📚 Sources',
           items: Array.isArray(data.sources)
             ? data.sources.map(s => typeof s === 'string' ? s : (s.title || s.name || JSON.stringify(s)))
             : [String(data.sources)]
@@ -297,7 +246,7 @@ export class VoiceOpsAssistant {
         content: 'I can help you understand risk assessments in VoiceOps.',
         sections: [
           {
-            title: 'Risk Score Components',
+            title: '🎯 Risk Score Components',
             items: [
               'Behavioral pattern analysis (40%)',
               'Historical interaction data (25%)',
@@ -306,7 +255,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: 'Score Interpretation',
+            title: '📊 Score Interpretation',
             items: [
               'High Risk (70+): Immediate escalation required',
               'Medium Risk (40-69): Manual review recommended',
@@ -324,7 +273,7 @@ export class VoiceOpsAssistant {
         content: 'Here are the key fraud patterns VoiceOps detects:',
         sections: [
           {
-            title: 'High-Risk Patterns',
+            title: '🚨 High-Risk Patterns',
             items: [
               'Conditional promises with contradictions',
               'Identity concealment attempts',
@@ -333,7 +282,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: 'Medium-Risk Patterns',
+            title: '⚠️ Medium-Risk Patterns',
             items: [
               'Financial hardship claims',
               'Partial payment offers',
@@ -352,7 +301,7 @@ export class VoiceOpsAssistant {
         content: 'VoiceOps helps maintain compliance across multiple frameworks:',
         sections: [
           {
-            title: 'Regulatory Coverage',
+            title: '📋 Regulatory Coverage',
             items: [
               'UDAAP (Unfair, Deceptive practices)',
               'TCPA (Telephone Consumer Protection)',
@@ -361,7 +310,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: 'Automated Safeguards',
+            title: '🛡️ Automated Safeguards',
             items: [
               'Real-time flag detection',
               'Automatic escalation triggers',
@@ -380,7 +329,7 @@ export class VoiceOpsAssistant {
         content: 'VoiceOps integrates with your existing workflow through n8n:',
         sections: [
           {
-            title: 'Available Integrations',
+            title: '🔗 Available Integrations',
             items: [
               'Slack notifications for high-risk cases',
               'CRM record updates with risk tags',
@@ -389,7 +338,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: 'Trigger Conditions',
+            title: '⚡ Trigger Conditions',
             items: [
               'Risk score thresholds',
               'Pattern detection events',
@@ -408,7 +357,7 @@ export class VoiceOpsAssistant {
       content: 'I\'m here to help you with VoiceOps risk analysis and compliance management.',
       sections: [
         {
-          title: 'I can assist with',
+          title: '💡 I can assist with',
           items: [
             'Risk assessment interpretation',
             'Fraud pattern explanation',
@@ -442,7 +391,7 @@ export class VoiceOpsAssistant {
         content: `Analysis for Case ${callId}:`,
         sections: [
           {
-            title: 'Risk Decision',
+            title: '🎯 Risk Decision',
             items: [
               `Assessment: ${(rag.grounded_assessment || call.grounded_assessment || 'unknown').replace(/_/g, ' ').toUpperCase()}`,
               `Confidence: ${rag.confidence ? Math.round(rag.confidence * 100) + '%' : (risk.confidence ? Math.round(risk.confidence * 100) + '%' : '--')}`,
@@ -450,7 +399,7 @@ export class VoiceOpsAssistant {
             ]
           },
           {
-            title: 'Detected Patterns',
+            title: '🔍 Detected Patterns',
             items: (rag.matched_patterns || []).length ? rag.matched_patterns.map(pattern => `• ${pattern}`) : ['• No specific patterns recorded']
           }
         ],
@@ -466,11 +415,11 @@ export class VoiceOpsAssistant {
         content: `Recommended action for this case:`,
         sections: [
           {
-            title: 'Next Steps',
+            title: '📋 Next Steps',
             items: this.getActionSteps(action)
           },
           {
-            title: 'Compliance Considerations',
+            title: '⚖️ Compliance Considerations',
             items: (rag.regulatory_flags || []).length > 0 
               ? rag.regulatory_flags.map(flag => `• ${flag}`)
               : ['• No specific compliance flags detected']
@@ -487,7 +436,7 @@ export class VoiceOpsAssistant {
       content: `Case ${callId} Overview:`,
       sections: [
         {
-          title: 'Quick Facts',
+          title: '📊 Quick Facts',
           items: [
             `Call ID: ${call.call_id}`,
             `Risk Level: ${(rag.grounded_assessment || call.grounded_assessment || 'unknown').replace(/_/g, ' ')}`,

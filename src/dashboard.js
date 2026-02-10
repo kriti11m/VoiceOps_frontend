@@ -154,11 +154,11 @@ function renderActivityItem(activity, index) {
   const assessment = activity.grounded_assessment || '';
   const riskLevel = assessment === 'high_risk' ? 'high' : (assessment === 'medium_risk' ? 'medium' : 'low');
   const typeIcons = {
-    high: '�',
-    medium: '⚠️',
-    low: '✅'
+    high: '',
+    medium: '',
+    low: ''
   };
-  const icon = typeIcons[riskLevel] || '📋';
+  const icon = typeIcons[riskLevel] || '';
   const timeStr = activity.call_timestamp ? timeAgoShort(new Date(activity.call_timestamp)) : '--';
   const actionLabel = activity.status ? activity.status.replace('_', ' ').toUpperCase() : 'PROCESSED';
   const detail = activity.summary_for_rag || activity.reason || '';
