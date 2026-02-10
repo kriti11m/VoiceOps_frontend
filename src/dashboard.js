@@ -71,7 +71,7 @@ export async function renderDashboard() {
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
               Recent Activity
             </h3>
-            <button class="dash-view-all" onclick="navigateTo('workflow-logs')">View All →</button>
+            <button class="dash-view-all" onclick="navigateTo('cases')">View All →</button>
           </div>
           <div class="dash-activity-list">
             ${activity.length ? activity.map((a, i) => renderActivityItem(a, i)).join('') : renderEmptyActivity()}
@@ -115,10 +115,6 @@ export async function renderDashboard() {
         <button class="dash-action-btn secondary" onclick="navigateTo('risk-queue')">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
           Risk Queue
-        </button>
-        <button class="dash-action-btn secondary" onclick="navigateTo('workflow-logs')">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-          Workflow Logs
         </button>
       </div>
 
