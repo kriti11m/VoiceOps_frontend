@@ -1,6 +1,6 @@
 // VoiceOps AI Assistant Chatbot Module
 
-const API_BASE_URL = 'https://afb1-2409-40f4-40d7-a60c-74de-7968-e0be-e422.ngrok-free.app';
+import { API_BASE_URL } from './api.js';
 
 export class VoiceOpsAssistant {
   constructor() {
@@ -54,6 +54,7 @@ export class VoiceOpsAssistant {
             <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
           </svg>
           <p>How can I help you today?</p>
+          <div class="suggestion-chips" id="suggestion-chips"></div>
         </div>
         
         <div class="chat-messages" id="chat-messages"></div>
@@ -100,22 +101,72 @@ export class VoiceOpsAssistant {
 
       // Send button click
       sendBtn.addEventListener('click', () => this.sendMessage());
+
+      // Suggestion chips
+      document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('chip-btn')) {
+          this.sendPredefinedMessage(e.target.textContent);
+        }
+      });
     }
   }
 
-  // Set welcome message
+  // Set welcome message and suggestions
   setWelcomeMessage() {
-    // No suggestion chips — just show the empty state
+    this.updateSuggestions(this.getContextualSuggestions());
   }
 
-  // Get contextual suggestions (disabled — chips removed)
+  // Get contextual suggestions based on current page/context
   getContextualSuggestions() {
-    return [];
+    if (!this.currentContext) {
+      return [
+        "Show me today's high-risk cases",
+        "Explain fraud detection patterns",
+        "What are common compliance flags?",
+        "How does the RAG system work?"
+      ];
+    }
+
+    switch (this.currentContext.page) {
+      case 'investigation':
+        return [
+          "Explain this risk assessment",
+          "What patterns were detected?",
+          "Recommend next actions",
+          "Show similar cases"
+        ];
+      case 'home':
+        return [
+          "Summarize today's risk alerts",
+          "Show processing statistics",
+          "Explain risk score distribution",
+          "Review automation status"
+        ];
+      case 'risk-queue':
+        return [
+          "Prioritize high-risk cases",
+          "Bulk action recommendations",
+          "Compliance review checklist",
+          "Export queue summary"
+        ];
+      default:
+        return [
+          "Help with risk analysis",
+          "Compliance guidelines",
+          "Pattern recognition tips",
+          "Workflow automation"
+        ];
+    }
   }
 
-  // Update suggestion chips (disabled — chips removed)
-  updateSuggestions() {
-    // No-op: suggestion chips have been removed from the UI
+  // Update suggestion chips
+  updateSuggestions(suggestions) {
+    const chipsContainer = document.getElementById('suggestion-chips');
+    if (!chipsContainer) return;
+
+    chipsContainer.innerHTML = suggestions.map(suggestion => 
+      `<button class="chip-btn">${suggestion}</button>`
+    ).join('');
   }
 
   // Send a message

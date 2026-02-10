@@ -34,24 +34,6 @@ export async function renderDashboard() {
 
   return `
     <div class="dashboard-page">
-      
-      <!-- System Health Bar -->
-      <div class="dash-health-bar">
-        <div class="dash-health-status ${health.status === 'healthy' ? 'online' : 'degraded'}">
-          <span class="dash-health-dot"></span>
-          <span>All Systems ${health.status === 'healthy' ? 'Operational' : 'Degraded'}</span>
-        </div>
-        <div class="dash-health-meta">
-          <span class="dash-health-item">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
-            ${health.components?.database || 'unknown'}
-          </span>
-          <span class="dash-health-item">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-            ${health.components?.knowledge_base || 'unknown'}
-          </span>
-        </div>
-      </div>
 
       <!-- KPI Stats Row -->
       <div class="dash-stats-row">

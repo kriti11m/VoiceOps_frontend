@@ -1,7 +1,7 @@
 // VoiceOps API Service — Centralized data fetching from backend
 // All pages use this module instead of mock data
 
-const API_BASE_URL = 'https://afb1-2409-40f4-40d7-a60c-74de-7968-e0be-e422.ngrok-free.app';
+const API_BASE_URL = 'https://9f45-2409-40f4-9-da5f-1850-3f77-d3de-66e8.ngrok-free.app';
 
 const API_HEADERS = {
   'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export async function sendChatMessage(question) {
 // ─── Analyze Call API ───────────────────────────────────────
 // Separate ngrok URL; sends audio file as multipart/form-data
 
-const ANALYZE_CALL_URL = 'https://be35-2409-40f4-3-ffec-dd21-5c50-cb7e-c5f5.ngrok-free.app/analyze-call';
+const ANALYZE_CALL_URL = 'https://e4cd-2409-40f4-b-4b8d-d11f-bb2a-9b8b-ca39.ngrok-free.app/analyze-call';
 
 export async function analyzeCall(audioFile) {
   const formData = new FormData();
