@@ -8,13 +8,6 @@
   <b>Real-time AI-powered risk analysis & compliance monitoring for financial call centers</b>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Vanilla%20JS-ES2022-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
-  <img src="https://img.shields.io/badge/Vite-5.4.0-646CFF?style=flat-square&logo=vite&logoColor=white" />
-  <img src="https://img.shields.io/badge/Theme-Dark%20Mode-0D1117?style=flat-square" />
-  <img src="https://img.shields.io/badge/API-REST%20%2F%20ngrok-1F2937?style=flat-square" />
-  <img src="https://img.shields.io/badge/License-Private-red?style=flat-square" />
-</p>
 
 ---
 
@@ -407,6 +400,4 @@ All requests include `ngrok-skip-browser-warning: true` to bypass the ngrok inte
 
 ---
 
-<p align="center">
-  <sub>Built with ❤️ for operational intelligence</sub>
-</p>
+
