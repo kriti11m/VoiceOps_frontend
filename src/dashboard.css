@@ -258,42 +258,14 @@
   border: 1px solid rgba(148, 163, 184, 0.08);
 }
 
-.dash-activity-icon.high {
+.dash-activity-icon.escalation {
   background: rgba(244, 63, 94, 0.1);
   border-color: rgba(244, 63, 94, 0.2);
 }
 
-.dash-activity-icon.medium {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.2);
-}
-
-.dash-activity-icon.low {
+.dash-activity-icon.crm {
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.2);
-}
-
-.dash-risk-dot {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #64748b;
-}
-
-.dash-risk-dot.high {
-  background: #fb7185;
-  box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
-}
-
-.dash-risk-dot.medium {
-  background: #fbbf24;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
-}
-
-.dash-risk-dot.low {
-  background: #34d399;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 .dash-activity-content {

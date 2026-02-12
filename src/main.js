@@ -9,7 +9,7 @@ import './dashboard.css';
 import { n8nWorkflowJSON } from './data.js';
 import VoiceOpsAssistant from './chatbot.js';
 import { renderDashboard } from './dashboard.js';
-import { getCalls, getCallById, getActiveCases, getRecentActivity, updateCallStatus, analyzeCall, liveStore } from './api.js';
+import { getCalls, getCallById, getActiveCases, getRecentActivity, updateCallStatus, analyzeCall, getCallDocument, getCallFinancial, liveStore } from './api.js';
 
 // State
 let currentPage = 'dashboard';
@@ -800,6 +800,14 @@ async function renderInvestigationPage() {
 function renderActionButtons(action, callId) {
   return `
     <button class="btn-tertiary-ghost" onclick="markForMonitoring('${callId}')">Mark as Safe</button>
+    <button class="btn-insight-action" onclick="openDetailedInsights('${callId}')">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Detailed Insights
+    </button>
+    <button class="btn-insight-action financial" onclick="openFinancialInsights('${callId}')">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Financial Insights
+    </button>
   `;
 }
 
@@ -872,6 +880,269 @@ function openSourcesModal() {
     </div>
   </div>`;
   content.appendChild(modal);
+}
+
+// ─── Detailed Insights Modal ────────────────────────────────
+window.openDetailedInsights = async function(callId) {
+  const content = document.getElementById('content');
+  // Show loading modal immediately
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay active';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `<div class="insight-modal"><div class="insight-modal-header"><h3><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>Detailed Insights</h3><button class="insight-modal-close" onclick="this.closest('.modal-overlay').remove()">×</button></div><div class="insight-modal-body"><div class="insight-loading"><div class="insight-spinner"></div><p>Fetching document insights…</p></div></div></div>`;
+  content.appendChild(modal);
+
+  try {
+    const data = await getCallDocument(callId);
+    const doc = data.document || {};
+    const meta = data.extraction_metadata || {};
+    const fin = doc.financial_data || {};
+    const entities = doc.entities || {};
+
+    const body = modal.querySelector('.insight-modal-body');
+    body.innerHTML = `
+      <div class="insight-meta-bar">
+        <span>Call ID: <strong>${data.call_id || callId}</strong></span>
+        <span>Generated: <strong>${data.generated_at ? new Date(data.generated_at).toLocaleString() : '--'}</strong></span>
+        ${meta.model ? `<span>Model: <strong>${meta.model}</strong></span>` : ''}
+      </div>
+
+      <!-- Call Summary -->
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Call Summary
+        </div>
+        <p class="insight-block-text">${doc.call_summary || 'N/A'}</p>
+        <div class="insight-tag-row">
+          <span class="insight-tag blue">${(doc.call_purpose || 'N/A').replace(/_/g, ' ')}</span>
+          <span class="insight-tag ${doc.call_outcome === 'resolved' ? 'green' : 'amber'}">${(doc.call_outcome || 'N/A').replace(/_/g, ' ')}</span>
+        </div>
+      </div>
+
+      <!-- Key Discussion Points -->
+      ${(doc.key_discussion_points || []).length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Key Discussion Points
+        </div>
+        <ul class="insight-list">
+          ${doc.key_discussion_points.map(p => `<li>${p}</li>`).join('')}
+        </ul>
+      </div>` : ''}
+
+      <!-- Call Timeline -->
+      ${(doc.call_timeline || []).length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+          Call Timeline
+        </div>
+        <div class="insight-timeline">
+          ${doc.call_timeline.map(evt => `
+          <div class="insight-timeline-item">
+            <div class="insight-timeline-dot ${evt.significance === 'high' ? 'red' : evt.significance === 'medium' ? 'amber' : 'blue'}"></div>
+            <div class="insight-timeline-content">
+              <span class="insight-timeline-event">${evt.event}</span>
+              <span class="insight-timeline-meta">${evt.speaker || ''} · ${evt.timestamp_approx || ''}</span>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- Entities -->
+      ${Object.values(entities).some(v => Array.isArray(v) && v.length) ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Entities Detected
+        </div>
+        <div class="insight-entities-grid">
+          ${entities.persons?.length ? `<div class="insight-entity-group"><span class="insight-entity-label">Persons</span><div class="insight-chip-row">${entities.persons.map(p => `<span class="insight-chip">${p}</span>`).join('')}</div></div>` : ''}
+          ${entities.organizations?.length ? `<div class="insight-entity-group"><span class="insight-entity-label">Organizations</span><div class="insight-chip-row">${entities.organizations.map(o => `<span class="insight-chip">${o}</span>`).join('')}</div></div>` : ''}
+          ${entities.locations?.length ? `<div class="insight-entity-group"><span class="insight-entity-label">Locations</span><div class="insight-chip-row">${entities.locations.map(l => `<span class="insight-chip">${l}</span>`).join('')}</div></div>` : ''}
+          ${entities.reference_numbers?.length ? `<div class="insight-entity-group"><span class="insight-entity-label">References</span><div class="insight-chip-row">${entities.reference_numbers.map(r => `<span class="insight-chip">${r}</span>`).join('')}</div></div>` : ''}
+        </div>
+      </div>` : ''}
+
+      <!-- Risk Flags -->
+      ${(doc.risk_flags || []).length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          Risk Flags
+        </div>
+        <div class="insight-chip-row">${doc.risk_flags.map(f => `<span class="insight-chip red">${f.replace(/_/g, ' ')}</span>`).join('')}</div>
+      </div>` : ''}
+
+      <!-- Compliance Notes -->
+      ${(doc.compliance_notes || []).length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+          Compliance Notes
+        </div>
+        <ul class="insight-list">${doc.compliance_notes.map(n => `<li>${n}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <!-- Action Items -->
+      ${(doc.action_items || []).length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+          Action Items
+        </div>
+        <ul class="insight-list">${doc.action_items.map(a => `<li>${typeof a === 'string' ? a : (a.description || JSON.stringify(a))}</li>`).join('')}</ul>
+      </div>` : ''}
+    `;
+  } catch (err) {
+    console.error('[DetailedInsights] Failed:', err);
+    const body = modal.querySelector('.insight-modal-body');
+    body.innerHTML = `<div class="insight-error"><p>Failed to load detailed insights.</p><p style="font-size:12px;color:var(--text-muted)">${err.message}</p></div>`;
+  }
+}
+
+// ─── Financial Insights Modal ───────────────────────────────
+window.openFinancialInsights = async function(callId) {
+  const content = document.getElementById('content');
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay active';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `<div class="insight-modal"><div class="insight-modal-header"><h3><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Financial Insights</h3><button class="insight-modal-close" onclick="this.closest('.modal-overlay').remove()">×</button></div><div class="insight-modal-body"><div class="insight-loading"><div class="insight-spinner"></div><p>Fetching financial data…</p></div></div></div>`;
+  content.appendChild(modal);
+
+  try {
+    const data = await getCallFinancial(callId);
+    const fin = data.financial_data || {};
+    const commitments = data.commitments || [];
+    const actionItems = data.action_items || [];
+
+    const amounts = fin.amounts_mentioned || [];
+    const products = fin.financial_products || [];
+    const accountRefs = fin.account_references || [];
+    const txnRefs = fin.transaction_references || [];
+    const payCommits = fin.payment_commitments || [];
+
+    const body = modal.querySelector('.insight-modal-body');
+    body.innerHTML = `
+      <div class="insight-meta-bar">
+        <span>Call ID: <strong>${data.call_id || callId}</strong></span>
+      </div>
+
+      <!-- Amounts Mentioned -->
+      ${amounts.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Amounts Mentioned
+        </div>
+        <div class="fin-amounts-grid">
+          ${amounts.map(a => `
+          <div class="fin-amount-card">
+            <span class="fin-amount-value">${a.currency === 'INR' ? '₹' : (a.currency || '')}${(a.value ?? 0).toLocaleString()}</span>
+            <span class="fin-amount-context">${a.context || 'N/A'}</span>
+          </div>`).join('')}
+        </div>
+      </div>` : `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Amounts Mentioned
+        </div>
+        <p class="insight-empty">No amounts mentioned in this call.</p>
+      </div>`}
+
+      <!-- EMI Details -->
+      ${fin.emi_details ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          EMI Details
+        </div>
+        <p class="insight-block-text">${typeof fin.emi_details === 'string' ? fin.emi_details : JSON.stringify(fin.emi_details)}</p>
+      </div>` : ''}
+
+      <!-- Total Outstanding -->
+      ${fin.total_outstanding !== null && fin.total_outstanding !== undefined ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
+          Total Outstanding
+        </div>
+        <span class="fin-outstanding">₹${Number(fin.total_outstanding).toLocaleString()}</span>
+      </div>` : ''}
+
+      <!-- Settlement Offered -->
+      ${fin.settlement_offered ? `
+      <div class="insight-block">
+        <div class="insight-block-header">Settlement Offered</div>
+        <p class="insight-block-text">${typeof fin.settlement_offered === 'string' ? fin.settlement_offered : JSON.stringify(fin.settlement_offered)}</p>
+      </div>` : ''}
+
+      <!-- Payment Commitments -->
+      ${payCommits.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+          Payment Commitments
+        </div>
+        <ul class="insight-list">${payCommits.map(p => `<li>${typeof p === 'string' ? p : (p.description || JSON.stringify(p))}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <!-- Financial Products -->
+      ${products.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">Financial Products</div>
+        <div class="insight-chip-row">${products.map(p => `<span class="insight-chip">${typeof p === 'string' ? p : (p.name || JSON.stringify(p))}</span>`).join('')}</div>
+      </div>` : ''}
+
+      <!-- Account References -->
+      ${accountRefs.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">Account References</div>
+        <div class="insight-chip-row">${accountRefs.map(r => `<span class="insight-chip">${r}</span>`).join('')}</div>
+      </div>` : ''}
+
+      <!-- Transaction References -->
+      ${txnRefs.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">Transaction References</div>
+        <div class="insight-chip-row">${txnRefs.map(r => `<span class="insight-chip">${r}</span>`).join('')}</div>
+      </div>` : ''}
+
+      <!-- Commitments -->
+      ${commitments.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+          Commitments
+        </div>
+        <ul class="insight-list">${commitments.map(c => `<li>${typeof c === 'string' ? c : (c.description || JSON.stringify(c))}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <!-- Action Items -->
+      ${actionItems.length ? `
+      <div class="insight-block">
+        <div class="insight-block-header">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,11 12,14 22,4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Action Items
+        </div>
+        <ul class="insight-list">${actionItems.map(a => `<li>${typeof a === 'string' ? a : (a.description || JSON.stringify(a))}</li>`).join('')}</ul>
+      </div>` : ''}
+
+      <!-- Empty state if nothing meaningful -->
+      ${!amounts.length && !fin.emi_details && !fin.total_outstanding && !payCommits.length && !commitments.length && !actionItems.length ? `
+      <div class="insight-empty-state">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        <p>No significant financial data extracted from this call.</p>
+      </div>` : ''}
+    `;
+  } catch (err) {
+    console.error('[FinancialInsights] Failed:', err);
+    const body = modal.querySelector('.insight-modal-body');
+    body.innerHTML = `<div class="insight-error"><p>Failed to load financial insights.</p><p style="font-size:12px;color:var(--text-muted)">${err.message}</p></div>`;
+  }
 }
 
 function renderModalContent() {

@@ -137,10 +137,9 @@ export class VoiceOpsAssistant {
         ];
       case 'home':
         return [
-          "Summarize today's risk alerts",
-          "Show processing statistics",
-          "Explain risk score distribution",
-          "Review automation status"
+          "summarize last 5 calls",
+          "",
+         
         ];
       case 'risk-queue':
         return [
